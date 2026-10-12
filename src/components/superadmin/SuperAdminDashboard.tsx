@@ -21,7 +21,8 @@ import {
   Users,
   CreditCard,
   Zap,
-  Sparkles
+  Sparkles,
+  RotateCcw
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Modal } from '../common/Modal';
@@ -41,6 +42,7 @@ export const SuperAdminDashboard: React.FC = () => {
     activateTenant,
     deleteTenant,
     createTenantBySuperAdmin,
+    clearAllTenantData,
     currency,
     language
   } = useApp();
@@ -426,6 +428,19 @@ export const SuperAdminDashboard: React.FC = () => {
                               <PlayCircle className="w-4 h-4" />
                             </button>
                           )}
+
+                          {/* Reset to Zero Data */}
+                          <button
+                            onClick={() => {
+                              if (confirm(`Voulez-vous remettre à zéro toutes les données (caisse, factures, salaires, clients) de "${tenant.name}" afin qu'elle démarre sur une base vierge ?`)) {
+                                clearAllTenantData(tenant.id);
+                              }
+                            }}
+                            className="p-1.5 rounded-lg border border-slate-700 bg-slate-800 hover:bg-amber-950/40 text-slate-400 hover:text-amber-400 transition-colors cursor-pointer"
+                            title="Remettre toutes les données de cette entreprise à 0 (Base vierge)"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                          </button>
 
                           {/* Delete */}
                           <button

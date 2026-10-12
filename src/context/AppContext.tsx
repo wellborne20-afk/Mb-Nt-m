@@ -80,6 +80,7 @@ interface AppContextType {
   suspendTenant: (tenantId: string) => void;
   activateTenant: (tenantId: string) => void;
   deleteTenant: (tenantId: string) => void;
+  addModuleToTenant: (tenantId: string, moduleId: ERPModuleId, months: number, price?: number) => void;
   isModuleAccessible: (moduleId: ERPModuleId) => boolean;
   isSubscriptionActive: () => boolean;
 
@@ -145,6 +146,7 @@ interface AppContextType {
   addAuditLog: (action: string, module: string, details: string) => void;
 
   // Backup & Reset
+  clearAllTenantData: (tenantId: string) => void;
   exportFullBackup: () => string;
   importFullBackup: (jsonData: string) => boolean;
   resetToDemoData: () => void;
@@ -364,6 +366,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     addAuditLog('Suppression entreprise', 'Super Admin', `Suppression définitive du tenant ${tenantId}`);
   };
 
+  const addModuleToTenant = (tenantId: string, moduleId: ERPModuleId, months: number, price?: number) => {
+    setTenants(prev => prev.map(t => {
+      if (t.id === tenantId) {
+        const expDate = new Date();
+        expDate.setMonth(expDate.getMonth() + months);
+        const expDateStr = expDate.toISOString().split('T')[0];
+
+        const catalog = defaultModulesCatalog[moduleId];
+        const chosenPrice = price !== undefined ? price : (t.modules?.[moduleId]?.monthlyPrice || catalog.monthlyPrice);
+
+        const updatedModules = {
+          ...t.modules,
+          [moduleId]: {
+            moduleId,
+            name: catalog.name,
+            description: catalog.description,
+            isEnabled: true,
+            expiresAt: expDateStr,
+            monthlyPrice: chosenPrice,
+          }
+        };
+
+        return {
+          ...t,
+          modules: updatedModules,
+          subscriptionStatus: 'active',
+        };
+      }
+      return t;
+    }));
+    addAuditLog('Ajout d\'un nouveau module', 'Abonnements', `Module ${moduleId} ajouté pour l'entreprise ${tenantId} (${months} mois)`);
+  };
+
   const createTenantBySuperAdmin = (
     tenantData: Omit<Tenant, 'id' | 'modules'>,
     adminUser: { name: string; email: string; phone: string },
@@ -414,13 +449,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       lastLogin: new Date().toISOString(),
     };
 
+    // ZERO INITIAL BALANCE - The client starts with an empty cash journal and inputs all amounts themselves
     const newAccount: FinancialAccount = {
       id: `acc-${Date.now()}`,
       tenantId: newTenantId,
       name: `Caisse Principale (${tenantData.city || 'Siège'})`,
       type: 'cash',
-      balance: 100000,
-      initialBalance: 100000,
+      balance: 0,
+      initialBalance: 0,
       currency: tenantData.currency || 'XAF',
     };
 
@@ -428,7 +464,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setUsers(prev => [...prev, newAdminUser]);
     setAccounts(prev => [...prev, newAccount]);
 
-    addAuditLog('Création entreprise par Super Admin', 'Super Admin', `Nouvelle entreprise : ${newTenant.name} (${newTenant.city}) avec ${selectedModuleIds.length} modules pour ${durationMonths} mois`);
+    addAuditLog('Création entreprise par Super Admin', 'Super Admin', `Nouvelle entreprise : ${newTenant.name} (${newTenant.city}) avec ${selectedModuleIds.length} modules pour ${durationMonths} mois. Solde initial à 0.`);
   };
 
   const isModuleAccessible = (moduleId: ERPModuleId): boolean => {
@@ -920,6 +956,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  const clearAllTenantData = (tenantId: string) => {
+    // Reset account balances to 0
+    setAccounts(prev => prev.map(a => a.tenantId === tenantId ? { ...a, balance: 0, initialBalance: 0 } : a));
+    // Remove all transactions
+    setTransactions(prev => prev.filter(t => t.tenantId !== tenantId));
+    // Remove all daily closings
+    setDailyClosings(prev => prev.filter(c => c.tenantId !== tenantId));
+    // Remove all invoices
+    setInvoices(prev => prev.filter(i => i.tenantId !== tenantId));
+    // Remove all payroll records
+    setPayrolls(prev => prev.filter(p => p.tenantId !== tenantId));
+    // Remove all leave requests
+    setLeaves(prev => prev.filter(l => l.tenantId !== tenantId));
+    // Remove all employees except leave empty
+    setEmployees(prev => prev.filter(e => e.tenantId !== tenantId));
+    // Remove all assets
+    setAssets(prev => prev.filter(a => a.tenantId !== tenantId));
+    setAssetAssignments(prev => prev.filter(a => a.tenantId !== tenantId));
+    // Remove all customers
+    setCustomers(prev => prev.filter(c => c.tenantId !== tenantId));
+    setCrmDeals(prev => prev.filter(d => d.tenantId !== tenantId));
+    // Reset budgets
+    setBudgets(prev => prev.map(b => b.tenantId === tenantId ? { ...b, currentSpent: 0 } : b));
+
+    addAuditLog('Remise à zéro intégrale des données', 'Administration', `Toutes les données de l'entreprise ${tenantId} ont été remises à 0 pour une utilisation vierge.`);
+  };
+
   const resetToDemoData = () => {
     setTenants(initialTenants);
     setUsers(initialUsers);
@@ -958,6 +1021,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         suspendTenant,
         activateTenant,
         deleteTenant,
+        addModuleToTenant,
         isModuleAccessible,
         isSubscriptionActive,
         activeModule,
@@ -1018,6 +1082,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addAuditLog,
         exportFullBackup,
         importFullBackup,
+        clearAllTenantData,
         resetToDemoData,
       }}
     >

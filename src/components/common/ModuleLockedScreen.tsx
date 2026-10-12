@@ -10,7 +10,7 @@ interface ModuleLockedScreenProps {
 }
 
 export const ModuleLockedScreen: React.FC<ModuleLockedScreenProps> = ({ moduleId }) => {
-  const { currentTenant, currency, language, isSuperAdmin, superAdminReturnToConsole } = useApp();
+  const { currentTenant, currency, language, isSuperAdmin, superAdminReturnToConsole, addModuleToTenant } = useApp();
   const moduleInfo = defaultModulesCatalog[moduleId] || {
     name: 'Module',
     description: '',
@@ -62,7 +62,7 @@ export const ModuleLockedScreen: React.FC<ModuleLockedScreenProps> = ({ moduleId
           </div>
         </div>
 
-        {/* Contact or Super Admin Action */}
+        {/* Instant Module Subscription Expansion or Super Admin Action */}
         <div className="pt-2 space-y-3">
           {isSuperAdmin ? (
             <button
@@ -72,13 +72,37 @@ export const ModuleLockedScreen: React.FC<ModuleLockedScreenProps> = ({ moduleId
               👑 Activer ce module depuis la Console Super Admin
             </button>
           ) : (
-            <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 text-xs text-emerald-800 dark:text-emerald-300 space-y-1">
-              <div className="font-bold flex items-center justify-center gap-1.5">
-                <Phone className="w-3.5 h-3.5" />
-                Service Client & Facturation Mbǎ'Ntām
+            <div className="space-y-3">
+              <div className="p-4 rounded-2xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-left space-y-2">
+                <div className="font-bold text-xs text-indigo-900 dark:text-indigo-300 flex items-center gap-1.5">
+                  <ShieldAlert className="w-4 h-4 text-indigo-500" />
+                  Souscrire et Ajouter ce Module à votre Entreprise
+                </div>
+                <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                  Votre entreprise souhaite utiliser <strong>{moduleInfo.name}</strong> ? Vous pouvez l'ajouter immédiatement à votre abonnement pour 1, 3, 6 ou 12 mois.
+                </p>
+                <div className="pt-2 flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      if (confirm(`Confirmez-vous l'ajout et l'activation du module "${moduleInfo.name}" pour ${currentTenant.name} ?`)) {
+                        addModuleToTenant(currentTenant.id, moduleId, 1, effectivePrice);
+                      }
+                    }}
+                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md transition-colors cursor-pointer text-center flex items-center justify-center gap-1.5"
+                  >
+                    <span>Ajouter & Activer ce Module (+1 Mois)</span>
+                  </button>
+                </div>
               </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                Contactez votre chargé de compte au <strong>+237 677 89 45 12</strong> ou par WhatsApp pour activer ou prolonger ce module.
+
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-300 space-y-1">
+                <div className="font-bold flex items-center justify-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-emerald-600" />
+                  Assistance Commerciale Mbǎ'Ntām
+                </div>
+                <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Support & Service Commercial : <strong>+237 677 89 45 12</strong> (MTN MoMo / Orange Money / Facture).
+                </div>
               </div>
             </div>
           )}
