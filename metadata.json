@@ -1,0 +1,6 @@
+{
+  "name": "Mbǎ'Ntām - ERP & SaaS PME Afrique",
+  "description": "Solution tout-en-un de gestion financière, trésorerie, facturation, RH, paie camerounaise et CRM pour PME en Afrique francophone.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
