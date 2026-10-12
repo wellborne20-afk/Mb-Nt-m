@@ -68,7 +68,8 @@ interface AppContextType {
     tenantData: Omit<Tenant, 'id' | 'modules'>,
     adminUser: { name: string; email: string; phone: string },
     selectedModuleIds: ERPModuleId[],
-    durationMonths: number
+    durationMonths: number,
+    customModulePrices?: Partial<Record<ERPModuleId, number>>
   ) => void;
   updateTenantModules: (
     tenantId: string,
@@ -367,7 +368,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     tenantData: Omit<Tenant, 'id' | 'modules'>,
     adminUser: { name: string; email: string; phone: string },
     selectedModuleIds: ERPModuleId[],
-    durationMonths: number
+    durationMonths: number,
+    customModulePrices?: Partial<Record<ERPModuleId, number>>
   ) => {
     const newTenantId = `tenant-${Date.now()}`;
     const expDate = new Date();
@@ -377,13 +379,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const initialModules = {} as Record<ERPModuleId, ModuleSubscription>;
     (Object.keys(defaultModulesCatalog) as ERPModuleId[]).forEach(mId => {
       const isSelected = selectedModuleIds.includes(mId);
+      const configuredPrice = customModulePrices && customModulePrices[mId] !== undefined
+        ? Number(customModulePrices[mId])
+        : defaultModulesCatalog[mId].monthlyPrice;
+
       initialModules[mId] = {
         moduleId: mId,
         name: defaultModulesCatalog[mId].name,
         description: defaultModulesCatalog[mId].description,
         isEnabled: isSelected,
         expiresAt: isSelected ? expDateStr : new Date().toISOString().split('T')[0],
-        monthlyPrice: defaultModulesCatalog[mId].monthlyPrice,
+        monthlyPrice: configuredPrice,
       };
     });
 

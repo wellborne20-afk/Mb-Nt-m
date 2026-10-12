@@ -21,6 +21,7 @@ export const ModuleLockedScreen: React.FC<ModuleLockedScreenProps> = ({ moduleId
   const isExpired = tenantModule?.isEnabled && tenantModule.expiresAt < new Date().toISOString().split('T')[0];
   const isNotSubscribed = !tenantModule || !tenantModule.isEnabled;
   const isTenantSuspended = currentTenant.subscriptionStatus === 'suspended' || currentTenant.subscriptionStatus === 'expired';
+  const effectivePrice = tenantModule ? tenantModule.monthlyPrice : moduleInfo.monthlyPrice;
 
   return (
     <div className="min-h-[70vh] flex items-center justify-center p-4">
@@ -49,8 +50,8 @@ export const ModuleLockedScreen: React.FC<ModuleLockedScreenProps> = ({ moduleId
         {/* Pricing & Module details */}
         <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-left space-y-2 text-xs">
           <div className="flex justify-between font-bold text-slate-900 dark:text-white">
-            <span>Tarif unitaire du module :</span>
-            <span className="text-emerald-600">{formatCurrency(moduleInfo.monthlyPrice, currency)} / mois</span>
+            <span>Tarif unitaire négocié :</span>
+            <span className="text-emerald-600 font-mono text-sm">{formatCurrency(effectivePrice, currency)} / mois</span>
           </div>
           <p className="text-[11px] text-slate-500 dark:text-slate-400">
             {moduleInfo.description}

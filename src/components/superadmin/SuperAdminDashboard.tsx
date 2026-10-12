@@ -65,6 +65,14 @@ export const SuperAdminDashboard: React.FC = () => {
     'finances',
     'invoices',
   ]);
+  // Manual prices configured per module on creation (defaults to catalog price)
+  const [customNewPrices, setCustomNewPrices] = useState<Record<ERPModuleId, number>>(() => {
+    const initPrices: Record<ERPModuleId, number> = {} as any;
+    (Object.keys(defaultModulesCatalog) as ERPModuleId[]).forEach(mId => {
+      initPrices[mId] = defaultModulesCatalog[mId].monthlyPrice;
+    });
+    return initPrices;
+  });
 
   // Modal: Manage Tenant Modules & Duration
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
@@ -162,7 +170,8 @@ export const SuperAdminDashboard: React.FC = () => {
         phone: newAdminPhone,
       },
       selectedModules,
-      newDurationMonths
+      newDurationMonths,
+      customNewPrices
     );
 
     setIsCreateModalOpen(false);
@@ -545,52 +554,93 @@ export const SuperAdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          {/* Modules Selection with Prices */}
+          {/* Modules Selection with Manual Price Configuration */}
           <div className="space-y-2 pt-2">
             <div className="flex justify-between items-center">
-              <label className="block text-xs font-bold text-slate-300">
-                Modules Souscrits par l'Entreprise (À la carte) *
-              </label>
+              <div>
+                <label className="block text-xs font-bold text-slate-300">
+                  Modules Souscrits & Tarification Manuelle *
+                </label>
+                <div className="text-[11px] text-slate-400">
+                  Cochez les modules et ajustez le prix mensuel manuellement selon l'accord commercial conclu.
+                </div>
+              </div>
               <span className="text-[11px] text-emerald-400 font-bold">
                 {selectedModules.length} module(s) sélectionné(s)
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto p-1">
               {allModuleKeys.map(mId => {
                 const info = defaultModulesCatalog[mId];
                 const isChecked = selectedModules.includes(mId);
+                const currentPrice = customNewPrices[mId] !== undefined ? customNewPrices[mId] : info.monthlyPrice;
 
                 return (
-                  <label
+                  <div
                     key={mId}
-                    className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
+                    className={`p-3 rounded-xl border flex flex-col justify-between transition-colors ${
                       isChecked
-                        ? 'bg-emerald-950/40 border-emerald-500 text-white'
-                        : 'bg-slate-900 border-slate-800 text-slate-400'
+                        ? 'bg-slate-900 border-emerald-500 text-white'
+                        : 'bg-slate-950 border-slate-800 text-slate-400'
                     }`}
                   >
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={e => {
-                          if (e.target.checked) {
-                            setSelectedModules([...selectedModules, mId]);
-                          } else {
-                            setSelectedModules(selectedModules.filter(id => id !== mId));
-                          }
-                        }}
-                        className="rounded text-emerald-600 focus:ring-emerald-500"
-                      />
-                      <div>
-                        <div className="text-xs font-bold">{info.name}</div>
-                        <div className="text-[10px] text-slate-400">{formatCurrency(info.monthlyPrice, currency)} / mois</div>
+                    <div className="flex items-start justify-between gap-2">
+                      <label className="flex items-start gap-2.5 cursor-pointer flex-1">
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={e => {
+                            if (e.target.checked) {
+                              setSelectedModules([...selectedModules, mId]);
+                            } else {
+                              setSelectedModules(selectedModules.filter(id => id !== mId));
+                            }
+                          }}
+                          className="mt-0.5 rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4 cursor-pointer"
+                        />
+                        <div>
+                          <div className="text-xs font-bold text-white">{info.name}</div>
+                          <div className="text-[10px] text-slate-400 line-clamp-1">{info.description}</div>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Manual Price Field */}
+                    <div className="mt-2.5 pt-2 border-t border-slate-800 flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-semibold text-slate-400">Prix mensuel manuel :</span>
+                      <div className="flex items-center gap-1">
+                        <input
+                          type="number"
+                          step="500"
+                          min="0"
+                          value={currentPrice}
+                          onChange={e => {
+                            const val = parseFloat(e.target.value) || 0;
+                            setCustomNewPrices({
+                              ...customNewPrices,
+                              [mId]: val,
+                            });
+                          }}
+                          className="w-24 px-2 py-1 bg-slate-800 border border-slate-700 focus:border-emerald-500 rounded-lg text-xs font-mono font-bold text-emerald-400 text-right focus:outline-none"
+                        />
+                        <span className="text-[10px] font-bold text-slate-400">{currency}</span>
                       </div>
                     </div>
-                  </label>
+                  </div>
                 );
               })}
+            </div>
+
+            {/* Total Monthly Preview */}
+            <div className="p-2.5 rounded-xl bg-slate-900/90 border border-slate-800 flex items-center justify-between text-xs">
+              <span className="text-slate-400 font-semibold">Total Mensuel Calculé (selon vos prix fixés) :</span>
+              <span className="font-mono font-extrabold text-emerald-400 text-sm">
+                {formatCurrency(
+                  selectedModules.reduce((sum, mId) => sum + (customNewPrices[mId] !== undefined ? customNewPrices[mId] : defaultModulesCatalog[mId].monthlyPrice), 0),
+                  currency
+                )} / mois
+              </span>
             </div>
           </div>
 
@@ -692,27 +742,53 @@ export const SuperAdminDashboard: React.FC = () => {
                         <div>
                           <div className="font-bold text-white">{catalogInfo.name}</div>
                           <div className="text-[10px] text-slate-400">
-                            Tarif : {formatCurrency(catalogInfo.monthlyPrice, currency)} / mois
+                            {catalogInfo.description}
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-slate-400">Expire le :</span>
-                        <input
-                          type="date"
-                          value={mod.expiresAt}
-                          onChange={e => {
-                            setEditModulesState({
-                              ...editModulesState,
-                              [mId]: {
-                                ...mod,
-                                expiresAt: e.target.value,
-                              },
-                            });
-                          }}
-                          className="p-1 bg-slate-800 border border-slate-700 rounded-lg text-xs font-mono text-white"
-                        />
+                      <div className="flex items-center gap-3 flex-wrap justify-end">
+                        {/* Manual Price Input */}
+                        <div className="flex items-center gap-1 bg-slate-800/80 px-2 py-1 rounded-lg border border-slate-700">
+                          <span className="text-[10px] text-slate-400">Prix :</span>
+                          <input
+                            type="number"
+                            step="500"
+                            min="0"
+                            value={mod.monthlyPrice}
+                            onChange={e => {
+                              const val = parseFloat(e.target.value) || 0;
+                              setEditModulesState({
+                                ...editModulesState,
+                                [mId]: {
+                                  ...mod,
+                                  monthlyPrice: val,
+                                },
+                              });
+                            }}
+                            className="w-20 bg-transparent text-xs font-mono font-bold text-emerald-400 text-right focus:outline-none"
+                          />
+                          <span className="text-[10px] text-slate-400 font-bold">{currency}</span>
+                        </div>
+
+                        {/* Expiration date */}
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] text-slate-400">Expire :</span>
+                          <input
+                            type="date"
+                            value={mod.expiresAt}
+                            onChange={e => {
+                              setEditModulesState({
+                                ...editModulesState,
+                                [mId]: {
+                                  ...mod,
+                                  expiresAt: e.target.value,
+                                },
+                              });
+                            }}
+                            className="p-1 bg-slate-800 border border-slate-700 rounded-lg text-xs font-mono text-white"
+                          />
+                        </div>
                       </div>
                     </div>
                   );
