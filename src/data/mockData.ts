@@ -17,6 +17,44 @@ import {
   AppNotification
 } from '../types';
 
+export const defaultModulesCatalog: Record<ERPModuleId, { name: string; description: string; monthlyPrice: number }> = {
+  finances: {
+    name: 'Journal Financier & Caisse',
+    description: 'Suivi journalier, entrées/sorties, caisses physiques, Mobile Money (MTN/Orange), clôtures et prévisions',
+    monthlyPrice: 15000,
+  },
+  invoices: {
+    name: 'Facturation & Devis',
+    description: 'Devis, factures proforma, factures définitives avec TVA 19.25%, QR code et relance WhatsApp',
+    monthlyPrice: 10000,
+  },
+  hr: {
+    name: 'Ressources Humaines',
+    description: 'Dossiers employés, immatriculation CNPS, contrats, attestations et congés',
+    monthlyPrice: 15000,
+  },
+  payroll: {
+    name: 'Paie & Salaires Cameroun',
+    description: 'Moteur de calcul CNPS 4.2%, IRPP, CAC, CFC, bulletins de paie et ordres de virement',
+    monthlyPrice: 20000,
+  },
+  assets: {
+    name: 'Parc Matériel & Décharges',
+    description: 'Inventaire, fiches de décharge signées numériquement, amortissement et maintenance',
+    monthlyPrice: 10000,
+  },
+  crm: {
+    name: 'CRM & Pipeline Commercial',
+    description: 'Pipeline de vente Kanban, fiches clients, segmentation et contact direct WhatsApp',
+    monthlyPrice: 10000,
+  },
+  reports: {
+    name: 'Bilans & Analyses Financières',
+    description: 'Bilans périodiques OHADA, calcul de la marge nette et ventilation par service',
+    monthlyPrice: 10000,
+  },
+};
+
 export const initialTenants: Tenant[] = [
   {
     id: 'tenant-kemet-dla',
@@ -33,8 +71,20 @@ export const initialTenants: Tenant[] = [
     currency: 'XAF',
     vatRate: 19.25,
     stampDuty: 1000,
-    subscriptionPlan: 'pro',
+    subscriptionPlan: 'enterprise',
     subscriptionStatus: 'active',
+    expiresAt: '2026-11-30',
+    createdAt: '2024-01-15',
+    modules: {
+      finances: { moduleId: 'finances', name: 'Journal Financier & Caisse', description: defaultModulesCatalog.finances.description, isEnabled: true, expiresAt: '2026-11-30', monthlyPrice: 15000 },
+      invoices: { moduleId: 'invoices', name: 'Facturation & Devis', description: defaultModulesCatalog.invoices.description, isEnabled: true, expiresAt: '2026-11-30', monthlyPrice: 10000 },
+      hr: { moduleId: 'hr', name: 'Ressources Humaines', description: defaultModulesCatalog.hr.description, isEnabled: true, expiresAt: '2026-11-30', monthlyPrice: 15000 },
+      payroll: { moduleId: 'payroll', name: 'Paie & Salaires Cameroun', description: defaultModulesCatalog.payroll.description, isEnabled: true, expiresAt: '2026-11-30', monthlyPrice: 20000 },
+      assets: { moduleId: 'assets', name: 'Parc Matériel & Décharges', description: defaultModulesCatalog.assets.description, isEnabled: true, expiresAt: '2026-11-30', monthlyPrice: 10000 },
+      crm: { moduleId: 'crm', name: 'CRM & Pipeline Commercial', description: defaultModulesCatalog.crm.description, isEnabled: true, expiresAt: '2026-11-30', monthlyPrice: 10000 },
+      reports: { moduleId: 'reports', name: 'Bilans & Analyses Financières', description: defaultModulesCatalog.reports.description, isEnabled: true, expiresAt: '2026-11-30', monthlyPrice: 10000 },
+    },
+    notes: 'Client grand compte avec suite logicielle intégrale active.',
   },
   {
     id: 'tenant-etoile-yde',
@@ -52,6 +102,47 @@ export const initialTenants: Tenant[] = [
     stampDuty: 1000,
     subscriptionPlan: 'starter',
     subscriptionStatus: 'active',
+    expiresAt: '2026-11-15',
+    createdAt: '2025-05-10',
+    modules: {
+      finances: { moduleId: 'finances', name: 'Journal Financier & Caisse', description: defaultModulesCatalog.finances.description, isEnabled: true, expiresAt: '2026-11-15', monthlyPrice: 15000 },
+      invoices: { moduleId: 'invoices', name: 'Facturation & Devis', description: defaultModulesCatalog.invoices.description, isEnabled: true, expiresAt: '2026-11-15', monthlyPrice: 10000 },
+      hr: { moduleId: 'hr', name: 'Ressources Humaines', description: defaultModulesCatalog.hr.description, isEnabled: false, expiresAt: '2026-10-01', monthlyPrice: 15000 },
+      payroll: { moduleId: 'payroll', name: 'Paie & Salaires Cameroun', description: defaultModulesCatalog.payroll.description, isEnabled: false, expiresAt: '2026-10-01', monthlyPrice: 20000 },
+      assets: { moduleId: 'assets', name: 'Parc Matériel & Décharges', description: defaultModulesCatalog.assets.description, isEnabled: false, expiresAt: '2026-10-01', monthlyPrice: 10000 },
+      crm: { moduleId: 'crm', name: 'CRM & Pipeline Commercial', description: defaultModulesCatalog.crm.description, isEnabled: false, expiresAt: '2026-10-01', monthlyPrice: 10000 },
+      reports: { moduleId: 'reports', name: 'Bilans & Analyses Financières', description: defaultModulesCatalog.reports.description, isEnabled: false, expiresAt: '2026-10-01', monthlyPrice: 10000 },
+    },
+    notes: 'Abonnement sur-mesure : Uniquement Caisse + Facturation.',
+  },
+  {
+    id: 'tenant-bassa-exp',
+    name: 'Boulangerie Bassa SARL',
+    legalForm: 'SARL',
+    taxId: 'M112399482012P',
+    tradeRegister: 'RC/DLA/2023/B/801',
+    address: 'Zone Industrielle Bassa',
+    city: 'Douala',
+    country: 'Cameroun',
+    phone: '+237 655 22 33 44',
+    email: 'contact@boulangerie-bassa.cm',
+    currency: 'XAF',
+    vatRate: 19.25,
+    stampDuty: 1000,
+    subscriptionPlan: 'starter',
+    subscriptionStatus: 'expired',
+    expiresAt: '2026-10-01', // Date expirée !
+    createdAt: '2026-06-01',
+    modules: {
+      finances: { moduleId: 'finances', name: 'Journal Financier & Caisse', description: defaultModulesCatalog.finances.description, isEnabled: true, expiresAt: '2026-10-01', monthlyPrice: 15000 },
+      invoices: { moduleId: 'invoices', name: 'Facturation & Devis', description: defaultModulesCatalog.invoices.description, isEnabled: true, expiresAt: '2026-10-01', monthlyPrice: 10000 },
+      hr: { moduleId: 'hr', name: 'Ressources Humaines', description: defaultModulesCatalog.hr.description, isEnabled: false, expiresAt: '2026-10-01', monthlyPrice: 15000 },
+      payroll: { moduleId: 'payroll', name: 'Paie & Salaires Cameroun', description: defaultModulesCatalog.payroll.description, isEnabled: false, expiresAt: '2026-10-01', monthlyPrice: 20000 },
+      assets: { moduleId: 'assets', name: 'Parc Matériel & Décharges', description: defaultModulesCatalog.assets.description, isEnabled: false, expiresAt: '2026-10-01', monthlyPrice: 10000 },
+      crm: { moduleId: 'crm', name: 'CRM & Pipeline Commercial', description: defaultModulesCatalog.crm.description, isEnabled: false, expiresAt: '2026-10-01', monthlyPrice: 10000 },
+      reports: { moduleId: 'reports', name: 'Bilans & Analyses Financières', description: defaultModulesCatalog.reports.description, isEnabled: false, expiresAt: '2026-10-01', monthlyPrice: 10000 },
+    },
+    notes: 'Abonnement arrivé à échéance sans paiement. Accès temporairement coupé.',
   }
 ];
 

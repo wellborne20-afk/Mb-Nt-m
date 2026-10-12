@@ -1,6 +1,17 @@
 export type Currency = 'XAF' | 'XOF' | 'EUR' | 'USD';
 export type Language = 'fr' | 'en';
-export type UserRole = 'owner' | 'director' | 'accountant' | 'hr' | 'sales' | 'employee';
+export type UserRole = 'superadmin' | 'owner' | 'director' | 'accountant' | 'hr' | 'sales' | 'employee';
+
+export type ERPModuleId = 'finances' | 'invoices' | 'hr' | 'payroll' | 'assets' | 'crm' | 'reports';
+
+export interface ModuleSubscription {
+  moduleId: ERPModuleId;
+  name: string;
+  description: string;
+  isEnabled: boolean;
+  expiresAt: string; // 'YYYY-MM-DD'
+  monthlyPrice: number; // in XAF
+}
 
 export interface Tenant {
   id: string;
@@ -19,7 +30,11 @@ export interface Tenant {
   vatRate: number; // e.g. 19.25
   stampDuty: number; // droit de timbre fiscal
   subscriptionPlan: 'starter' | 'pro' | 'enterprise';
-  subscriptionStatus: 'active' | 'trial' | 'expired';
+  subscriptionStatus: 'active' | 'suspended' | 'expired';
+  expiresAt: string; // Global expiration date (YYYY-MM-DD)
+  modules: Record<ERPModuleId, ModuleSubscription>;
+  createdAt?: string;
+  notes?: string;
 }
 
 export interface User {

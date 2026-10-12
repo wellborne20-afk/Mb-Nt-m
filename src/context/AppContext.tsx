@@ -20,6 +20,8 @@ import {
   CrmDeal,
   AuditLog,
   AppNotification,
+  ERPModuleId,
+  ModuleSubscription,
 } from '../types';
 import {
   initialTenants,
@@ -38,6 +40,7 @@ import {
   initialCrmDeals,
   initialAuditLogs,
   initialNotifications,
+  defaultModulesCatalog,
 } from '../data/mockData';
 
 interface AppContextType {
@@ -53,9 +56,32 @@ interface AppContextType {
 
   // Tenant, User & Auth Session
   isAuthenticated: boolean;
+  isSuperAdmin: boolean;
+  isImpersonating: boolean;
   login: (tenantId: string, email: string, role: UserRole) => void;
+  loginSuperAdmin: () => void;
+  superAdminImpersonate: (tenantId: string) => void;
+  superAdminReturnToConsole: () => void;
   logout: () => void;
   registerTenant: (tenantData: Omit<Tenant, 'id'>, adminUser: { name: string; email: string; phone: string; password?: string }) => void;
+  createTenantBySuperAdmin: (
+    tenantData: Omit<Tenant, 'id' | 'modules'>,
+    adminUser: { name: string; email: string; phone: string },
+    selectedModuleIds: ERPModuleId[],
+    durationMonths: number
+  ) => void;
+  updateTenantModules: (
+    tenantId: string,
+    modules: Record<ERPModuleId, ModuleSubscription>,
+    newGlobalExpirationDate?: string
+  ) => void;
+  renewTenantSubscription: (tenantId: string, monthsToAdd: number) => void;
+  suspendTenant: (tenantId: string) => void;
+  activateTenant: (tenantId: string) => void;
+  deleteTenant: (tenantId: string) => void;
+  isModuleAccessible: (moduleId: ERPModuleId) => boolean;
+  isSubscriptionActive: () => boolean;
+
   currentTenant: Tenant;
   tenants: Tenant[];
   switchTenant: (tenantId: string) => void;
@@ -139,6 +165,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => loadStored('isAuthenticated', false));
+  const [isSuperAdminSession, setIsSuperAdminSession] = useState<boolean>(() => loadStored('isSuperAdminSession', false));
+  const [isImpersonating, setIsImpersonating] = useState<boolean>(() => loadStored('isImpersonating', false));
   const [activeModule, setActiveModule] = useState<string>('dashboard');
   const [currency, setCurrency] = useState<Currency>(() => loadStored('currency', 'XAF'));
   const [language, setLanguage] = useState<Language>(() => loadStored('language', 'fr'));
@@ -207,7 +235,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   ]);
 
   const currentTenant = tenants.find(t => t.id === currentTenantId) || tenants[0];
-  const currentUser: User = {
+  const currentUser: User = (isSuperAdminSession && !isImpersonating) ? {
+    id: 'user-superadmin',
+    tenantId: 'platform-master',
+    name: 'Super Administrateur Mbǎ\'Ntām',
+    email: 'superadmin@mbantam.cm',
+    role: 'superadmin',
+    isActive: true,
+  } : {
     id: 'user-active',
     tenantId: currentTenant.id,
     name: currentRole === 'owner' ? 'Alexandre Mbida (Directeur)' :
@@ -225,13 +260,196 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const login = (tenantId: string, email: string, role: UserRole) => {
     setCurrentTenantId(tenantId);
     setCurrentRole(role);
+    setIsSuperAdminSession(false);
+    setIsImpersonating(false);
     setIsAuthenticated(true);
     addAuditLog('Connexion réussie', 'Authentification', `Connexion de ${email} (Rôle: ${role})`);
   };
 
+  const loginSuperAdmin = () => {
+    setIsAuthenticated(true);
+    setIsSuperAdminSession(true);
+    setIsImpersonating(false);
+    setCurrentRole('superadmin');
+    setActiveModule('superadmin_console');
+    addAuditLog('Connexion Super Administrateur', 'Sécurité Plateforme', 'Accès direct à la console centrale SaaS');
+  };
+
+  const superAdminImpersonate = (tenantId: string) => {
+    setCurrentTenantId(tenantId);
+    setIsImpersonating(true);
+    setCurrentRole('owner');
+    setActiveModule('dashboard');
+    addAuditLog('Prise en main entreprise (Impersonation)', 'Support Super Admin', `Accès à l'environnement client ${tenantId}`);
+  };
+
+  const superAdminReturnToConsole = () => {
+    setIsImpersonating(false);
+    setCurrentRole('superadmin');
+    setActiveModule('superadmin_console');
+    addAuditLog('Retour console centrale', 'Support Super Admin', 'Fermeture de l\'environnement client');
+  };
+
   const logout = () => {
     setIsAuthenticated(false);
+    setIsSuperAdminSession(false);
+    setIsImpersonating(false);
     addAuditLog('Déconnexion manuelle', 'Authentification', 'Déconnexion utilisateur');
+  };
+
+  const updateTenantModules = (
+    tenantId: string,
+    updatedModules: Record<ERPModuleId, ModuleSubscription>,
+    newGlobalExpirationDate?: string
+  ) => {
+    setTenants(prev => prev.map(t => {
+      if (t.id === tenantId) {
+        return {
+          ...t,
+          modules: updatedModules,
+          expiresAt: newGlobalExpirationDate || t.expiresAt,
+          subscriptionStatus: 'active',
+        };
+      }
+      return t;
+    }));
+    addAuditLog('Mise à jour modules & droits', 'Super Admin', `Ajustement des modules pour l'entreprise ${tenantId}`);
+  };
+
+  const renewTenantSubscription = (tenantId: string, monthsToAdd: number) => {
+    setTenants(prev => prev.map(t => {
+      if (t.id === tenantId) {
+        const currentExp = t.expiresAt;
+        const now = new Date();
+        const base = new Date(currentExp) < now ? now : new Date(currentExp);
+        base.setMonth(base.getMonth() + monthsToAdd);
+        const newExpDate = base.toISOString().split('T')[0];
+
+        // Also update modules expiration dates if enabled
+        const updatedMods = { ...t.modules };
+        (Object.keys(updatedMods) as ERPModuleId[]).forEach(mId => {
+          if (updatedMods[mId].isEnabled) {
+            updatedMods[mId] = {
+              ...updatedMods[mId],
+              expiresAt: newExpDate,
+            };
+          }
+        });
+
+        return {
+          ...t,
+          expiresAt: newExpDate,
+          subscriptionStatus: 'active',
+          modules: updatedMods,
+        };
+      }
+      return t;
+    }));
+    addAuditLog('Renouvellement abonnement', 'Super Admin', `Prolongation de ${monthsToAdd} mois pour ${tenantId}`);
+  };
+
+  const suspendTenant = (tenantId: string) => {
+    setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, subscriptionStatus: 'suspended' } : t));
+    addAuditLog('Suspension entreprise', 'Super Admin', `Accès suspendu pour non-paiement pour ${tenantId}`);
+  };
+
+  const activateTenant = (tenantId: string) => {
+    setTenants(prev => prev.map(t => t.id === tenantId ? { ...t, subscriptionStatus: 'active' } : t));
+    addAuditLog('Réactivation entreprise', 'Super Admin', `Rétablissement des accès pour ${tenantId}`);
+  };
+
+  const deleteTenant = (tenantId: string) => {
+    setTenants(prev => prev.filter(t => t.id !== tenantId));
+    addAuditLog('Suppression entreprise', 'Super Admin', `Suppression définitive du tenant ${tenantId}`);
+  };
+
+  const createTenantBySuperAdmin = (
+    tenantData: Omit<Tenant, 'id' | 'modules'>,
+    adminUser: { name: string; email: string; phone: string },
+    selectedModuleIds: ERPModuleId[],
+    durationMonths: number
+  ) => {
+    const newTenantId = `tenant-${Date.now()}`;
+    const expDate = new Date();
+    expDate.setMonth(expDate.getMonth() + durationMonths);
+    const expDateStr = expDate.toISOString().split('T')[0];
+
+    const initialModules = {} as Record<ERPModuleId, ModuleSubscription>;
+    (Object.keys(defaultModulesCatalog) as ERPModuleId[]).forEach(mId => {
+      const isSelected = selectedModuleIds.includes(mId);
+      initialModules[mId] = {
+        moduleId: mId,
+        name: defaultModulesCatalog[mId].name,
+        description: defaultModulesCatalog[mId].description,
+        isEnabled: isSelected,
+        expiresAt: isSelected ? expDateStr : new Date().toISOString().split('T')[0],
+        monthlyPrice: defaultModulesCatalog[mId].monthlyPrice,
+      };
+    });
+
+    const newTenant: Tenant = {
+      ...tenantData,
+      id: newTenantId,
+      expiresAt: expDateStr,
+      subscriptionStatus: 'active',
+      modules: initialModules,
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+
+    const newAdminUser: User = {
+      id: `user-${Date.now()}`,
+      tenantId: newTenantId,
+      name: adminUser.name,
+      email: adminUser.email,
+      phone: adminUser.phone,
+      role: 'owner',
+      department: 'Direction Générale',
+      isActive: true,
+      lastLogin: new Date().toISOString(),
+    };
+
+    const newAccount: FinancialAccount = {
+      id: `acc-${Date.now()}`,
+      tenantId: newTenantId,
+      name: `Caisse Principale (${tenantData.city || 'Siège'})`,
+      type: 'cash',
+      balance: 100000,
+      initialBalance: 100000,
+      currency: tenantData.currency || 'XAF',
+    };
+
+    setTenants(prev => [...prev, newTenant]);
+    setUsers(prev => [...prev, newAdminUser]);
+    setAccounts(prev => [...prev, newAccount]);
+
+    addAuditLog('Création entreprise par Super Admin', 'Super Admin', `Nouvelle entreprise : ${newTenant.name} (${newTenant.city}) avec ${selectedModuleIds.length} modules pour ${durationMonths} mois`);
+  };
+
+  const isModuleAccessible = (moduleId: ERPModuleId): boolean => {
+    if (currentUser.role === 'superadmin' && !isImpersonating) return true;
+    if (currentTenant.subscriptionStatus === 'suspended' || currentTenant.subscriptionStatus === 'expired') {
+      return false;
+    }
+    const today = new Date().toISOString().split('T')[0];
+    if (currentTenant.expiresAt < today) {
+      return false;
+    }
+    const mod = currentTenant.modules?.[moduleId];
+    if (!mod || !mod.isEnabled) return false;
+    if (mod.expiresAt < today) return false;
+    return true;
+  };
+
+  const isSubscriptionActive = (): boolean => {
+    if (currentUser.role === 'superadmin' && !isImpersonating) return true;
+    if (currentTenant.subscriptionStatus === 'suspended' || currentTenant.subscriptionStatus === 'expired') {
+      return false;
+    }
+    const today = new Date().toISOString().split('T')[0];
+    if (currentTenant.expiresAt < today) {
+      return false;
+    }
+    return true;
   };
 
   const registerTenant = (
@@ -720,9 +938,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     <AppContext.Provider
       value={{
         isAuthenticated,
+        isSuperAdmin: isSuperAdminSession,
+        isImpersonating,
         login,
+        loginSuperAdmin,
+        superAdminImpersonate,
+        superAdminReturnToConsole,
         logout,
         registerTenant,
+        createTenantBySuperAdmin,
+        updateTenantModules,
+        renewTenantSubscription,
+        suspendTenant,
+        activateTenant,
+        deleteTenant,
+        isModuleAccessible,
+        isSubscriptionActive,
         activeModule,
         setActiveModule,
         currency,

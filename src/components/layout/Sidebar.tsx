@@ -14,9 +14,14 @@ import {
   Sparkles,
   Building,
   CheckCircle,
-  HelpCircle
+  HelpCircle,
+  Crown,
+  Lock,
+  ArrowLeft
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
+import { ERPModuleId } from '../../types';
+import { formatDate } from '../../utils/formatters';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -24,7 +29,17 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
-  const { activeModule, setActiveModule, language, currentTenant, currentUser } = useApp();
+  const {
+    activeModule,
+    setActiveModule,
+    language,
+    currentTenant,
+    currentUser,
+    isModuleAccessible,
+    isSuperAdmin,
+    isImpersonating,
+    superAdminReturnToConsole
+  } = useApp();
 
   const navigationItems = [
     {
@@ -117,11 +132,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 SaaS
               </span>
             </div>
-            <div className="text-[10px] text-slate-400 font-medium">
-              ERP & Gestion Afrique
+            <div className="text-[10px] text-slate-400 font-medium truncate max-w-[140px]">
+              {currentTenant.name}
             </div>
           </div>
         </div>
+
+        {/* Super Admin Impersonation Banner */}
+        {(isImpersonating || isSuperAdmin) && (
+          <div className="p-2.5 bg-gradient-to-r from-purple-950 to-indigo-950 border-b border-purple-800/80">
+            <button
+              onClick={superAdminReturnToConsole}
+              className="w-full flex items-center justify-between p-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs cursor-pointer shadow-md transition-colors"
+              title="Retourner à la Console Master"
+            >
+              <span className="flex items-center gap-1.5">
+                <Crown className="w-3.5 h-3.5 text-amber-300" />
+                Console Super Admin
+              </span>
+              <ArrowLeft className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
 
         {/* Navigation Modules */}
         <div className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
@@ -130,23 +162,29 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           </div>
 
           {navigationItems.map(item => {
-            const hasPermission = item.roles.includes(currentUser.role);
+            const hasRolePermission = item.roles.includes(currentUser.role) || currentUser.role === 'superadmin';
+            const isSubscribedAndActive = (item.id === 'dashboard' || item.id === 'audit' || item.id === 'settings')
+              ? true
+              : isModuleAccessible(item.id as ERPModuleId);
+
             const isActive = activeModule === item.id;
 
             return (
               <button
                 key={item.id}
                 onClick={() => {
-                  if (hasPermission) {
+                  if (hasRolePermission) {
                     setActiveModule(item.id);
                     onClose();
                   }
                 }}
-                disabled={!hasPermission}
+                disabled={!hasRolePermission}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all group ${
                   isActive
                     ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
-                    : hasPermission
+                    : !isSubscribedAndActive
+                    ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 opacity-75'
+                    : hasRolePermission
                     ? 'text-slate-300 hover:text-white hover:bg-slate-800/80'
                     : 'text-slate-600 cursor-not-allowed opacity-50'
                 }`}
@@ -154,43 +192,57 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 <div className="flex items-center gap-3">
                   <item.icon
                     className={`w-4 h-4 transition-transform group-hover:scale-110 ${
-                      isActive ? 'text-white' : 'text-slate-400 group-hover:text-emerald-400'
+                      isActive ? 'text-white' : !isSubscribedAndActive ? 'text-slate-500' : 'text-slate-400 group-hover:text-emerald-400'
                     }`}
                   />
                   <span>{item.label}</span>
                 </div>
-                {item.badge && (
-                  <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded font-bold">
-                    {item.badge}
-                  </span>
-                )}
-                {!hasPermission && (
-                  <span className="text-[9px] text-slate-600 uppercase font-mono">
-                    Verrouillé
-                  </span>
-                )}
+
+                <div className="flex items-center gap-1">
+                  {!isSubscribedAndActive && (
+                    <span className="text-[9px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1.5 py-0.2 rounded font-bold flex items-center gap-0.5">
+                      <Lock className="w-2.5 h-2.5" />
+                      Coupé
+                    </span>
+                  )}
+                  {isSubscribedAndActive && item.badge && (
+                    <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded font-bold">
+                      {item.badge}
+                    </span>
+                  )}
+                  {!hasRolePermission && (
+                    <span className="text-[9px] text-slate-600 uppercase font-mono">
+                      Verrouillé
+                    </span>
+                  )}
+                </div>
               </button>
             );
           })}
         </div>
 
-        {/* PWA & System Badge Footer */}
+        {/* PWA & System Badge Footer with Subscription Validity */}
         <div className="p-3 border-t border-slate-800 bg-slate-950/60">
           <div className="p-3 rounded-xl bg-slate-900 border border-slate-800/80 space-y-2">
             <div className="flex items-center justify-between text-[11px]">
               <span className="flex items-center gap-1.5 text-slate-300 font-semibold">
                 <Wifi className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                PWA Hors-Ligne Prêt
+                PWA Offline
               </span>
-              <span className="text-[10px] text-emerald-400 font-bold bg-emerald-950/80 px-1.5 py-0.5 rounded border border-emerald-800">
-                100% Synchro
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${
+                currentTenant.subscriptionStatus === 'active'
+                  ? 'text-emerald-400 bg-emerald-950/80 border-emerald-800'
+                  : 'text-rose-400 bg-rose-950/80 border-rose-800'
+              }`}>
+                {currentTenant.subscriptionStatus === 'active' ? 'Abonnement Actif' : 'Abonnement Expiré'}
               </span>
             </div>
-            <div className="text-[10px] text-slate-400 truncate">
-              {currentTenant.name}
+            <div className="text-[10px] text-slate-400 flex justify-between">
+              <span>Échéance :</span>
+              <span className="font-mono font-bold text-slate-200">{formatDate(currentTenant.expiresAt, language)}</span>
             </div>
-            <div className="text-[10px] text-slate-500 flex justify-between">
-              <span>Monnaie: {currentTenant.currency}</span>
+            <div className="text-[10px] text-slate-500 flex justify-between pt-1 border-t border-slate-800">
+              <span>Monnaie : {currentTenant.currency}</span>
               <span className="text-emerald-400 font-semibold">TVA 19.25%</span>
             </div>
           </div>

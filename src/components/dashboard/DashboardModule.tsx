@@ -101,6 +101,30 @@ export const DashboardModule: React.FC = () => {
         </div>
       </div>
 
+      {/* Subscription Status Banner if expired or near expiry */}
+      {(currentTenant.subscriptionStatus === 'expired' || currentTenant.expiresAt < new Date().toISOString().split('T')[0]) && (
+        <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-rose-800 dark:text-rose-300">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-rose-500/20 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5 text-rose-500" />
+            </div>
+            <div>
+              <div className="font-bold text-xs">
+                Abonnement SaaS échu depuis le {formatDate(currentTenant.expiresAt, language)}
+              </div>
+              <div className="text-[11px] text-rose-700 dark:text-rose-400">
+                L'accès aux modules opérationnels est suspendu pour défaut de paiement. Contactez le Super Admin pour régulariser.
+              </div>
+            </div>
+          </div>
+          <div className="text-right sm:shrink-0">
+            <span className="text-[10px] font-mono bg-rose-500 text-white px-2.5 py-1 rounded-full font-bold">
+              ACCÈS RESTREINT
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* KPI Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard

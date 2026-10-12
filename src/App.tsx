@@ -18,16 +18,41 @@ import { ReportsModule } from './components/reports/ReportsModule';
 import { AuditLogModule } from './components/audit/AuditLogModule';
 import { SettingsModule } from './components/settings/SettingsModule';
 import { AuthModule } from './components/auth/AuthModule';
+import { SuperAdminDashboard } from './components/superadmin/SuperAdminDashboard';
+import { ModuleLockedScreen } from './components/common/ModuleLockedScreen';
+import { ERPModuleId } from './types';
 
 const MainLayout: React.FC = () => {
-  const { activeModule, isAuthenticated } = useApp();
+  const { activeModule, isAuthenticated, isSuperAdmin, isImpersonating, isModuleAccessible } = useApp();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (!isAuthenticated) {
     return <AuthModule />;
   }
 
+  // If Super Admin is logged in and not impersonating a client, show the Master Super Admin console
+  if (isSuperAdmin && !isImpersonating) {
+    return <SuperAdminDashboard />;
+  }
+
   const renderModule = () => {
+    // Check if the current module is locked (expired or not subscribed)
+    const subscriptionControlledModules: ERPModuleId[] = [
+      'finances',
+      'invoices',
+      'hr',
+      'payroll',
+      'assets',
+      'crm',
+      'reports'
+    ];
+
+    if (subscriptionControlledModules.includes(activeModule as ERPModuleId)) {
+      if (!isModuleAccessible(activeModule as ERPModuleId)) {
+        return <ModuleLockedScreen moduleId={activeModule as ERPModuleId} />;
+      }
+    }
+
     switch (activeModule) {
       case 'dashboard':
         return <DashboardModule />;
