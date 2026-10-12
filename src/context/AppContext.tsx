@@ -51,7 +51,11 @@ interface AppContextType {
   darkMode: boolean;
   toggleDarkMode: () => void;
 
-  // Tenant & User
+  // Tenant, User & Auth Session
+  isAuthenticated: boolean;
+  login: (tenantId: string, email: string, role: UserRole) => void;
+  logout: () => void;
+  registerTenant: (tenantData: Omit<Tenant, 'id'>, adminUser: { name: string; email: string; phone: string; password?: string }) => void;
   currentTenant: Tenant;
   tenants: Tenant[];
   switchTenant: (tenantId: string) => void;
@@ -134,6 +138,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => loadStored('isAuthenticated', false));
   const [activeModule, setActiveModule] = useState<string>('dashboard');
   const [currency, setCurrency] = useState<Currency>(() => loadStored('currency', 'XAF'));
   const [language, setLanguage] = useState<Language>(() => loadStored('language', 'fr'));
@@ -186,6 +191,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.setItem(STORAGE_PREFIX + 'customers', JSON.stringify(customers));
     localStorage.setItem(STORAGE_PREFIX + 'crmDeals', JSON.stringify(crmDeals));
     localStorage.setItem(STORAGE_PREFIX + 'auditLogs', JSON.stringify(auditLogs));
+    localStorage.setItem(STORAGE_PREFIX + 'isAuthenticated', JSON.stringify(isAuthenticated));
     localStorage.setItem(STORAGE_PREFIX + 'notifications', JSON.stringify(notifications));
 
     if (darkMode) {
@@ -194,6 +200,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       document.documentElement.classList.remove('dark');
     }
   }, [
+    isAuthenticated,
     currency, language, darkMode, tenants, currentTenantId, users, currentRole,
     accounts, transactions, dailyClosings, budgets, invoices, employees, leaves,
     payrolls, assets, assetAssignments, customers, crmDeals, auditLogs, notifications
@@ -214,6 +221,60 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const toggleDarkMode = () => setDarkMode(prev => !prev);
+
+  const login = (tenantId: string, email: string, role: UserRole) => {
+    setCurrentTenantId(tenantId);
+    setCurrentRole(role);
+    setIsAuthenticated(true);
+    addAuditLog('Connexion réussie', 'Authentification', `Connexion de ${email} (Rôle: ${role})`);
+  };
+
+  const logout = () => {
+    setIsAuthenticated(false);
+    addAuditLog('Déconnexion manuelle', 'Authentification', 'Déconnexion utilisateur');
+  };
+
+  const registerTenant = (
+    tenantData: Omit<Tenant, 'id'>,
+    adminUser: { name: string; email: string; phone: string; password?: string }
+  ) => {
+    const newTenantId = `tenant-${Date.now()}`;
+    const newTenant: Tenant = {
+      ...tenantData,
+      id: newTenantId,
+    };
+
+    const newAdminUser: User = {
+      id: `user-${Date.now()}`,
+      tenantId: newTenantId,
+      name: adminUser.name,
+      email: adminUser.email,
+      phone: adminUser.phone,
+      role: 'owner',
+      department: 'Direction Générale',
+      isActive: true,
+      lastLogin: new Date().toISOString(),
+    };
+
+    const newAccount: FinancialAccount = {
+      id: `acc-${Date.now()}`,
+      tenantId: newTenantId,
+      name: `Caisse Principale (${tenantData.city || 'Siège'})`,
+      type: 'cash',
+      balance: 200000,
+      initialBalance: 200000,
+      currency: tenantData.currency || 'XAF',
+    };
+
+    setTenants(prev => [...prev, newTenant]);
+    setUsers(prev => [...prev, newAdminUser]);
+    setAccounts(prev => [...prev, newAccount]);
+    setCurrentTenantId(newTenantId);
+    setCurrentRole('owner');
+    setIsAuthenticated(true);
+
+    addAuditLog('Création nouvelle organisation SaaS', 'Multi-tenant', `Entreprise : ${newTenant.name} (${newTenant.city}) par ${adminUser.name}`);
+  };
 
   const switchTenant = (tenantId: string) => {
     setCurrentTenantId(tenantId);
@@ -658,6 +719,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   return (
     <AppContext.Provider
       value={{
+        isAuthenticated,
+        login,
+        logout,
+        registerTenant,
         activeModule,
         setActiveModule,
         currency,

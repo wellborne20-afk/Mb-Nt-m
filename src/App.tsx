@@ -17,10 +17,15 @@ import { CrmModule } from './components/crm/CrmModule';
 import { ReportsModule } from './components/reports/ReportsModule';
 import { AuditLogModule } from './components/audit/AuditLogModule';
 import { SettingsModule } from './components/settings/SettingsModule';
+import { AuthModule } from './components/auth/AuthModule';
 
 const MainLayout: React.FC = () => {
-  const { activeModule } = useApp();
+  const { activeModule, isAuthenticated } = useApp();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  if (!isAuthenticated) {
+    return <AuthModule />;
+  }
 
   const renderModule = () => {
     switch (activeModule) {

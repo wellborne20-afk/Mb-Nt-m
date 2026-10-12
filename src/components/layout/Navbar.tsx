@@ -11,7 +11,8 @@ import {
   Shield,
   CheckCircle2,
   Download,
-  RotateCcw
+  RotateCcw,
+  LogOut
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { UserRole, Currency, Language } from '../../types';
@@ -38,7 +39,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
     clearNotifications,
     setActiveModule,
     resetToDemoData,
-    exportFullBackup
+    exportFullBackup,
+    logout
   } = useApp();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -274,6 +276,16 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
               </div>
             )}
           </div>
+
+          {/* Logout Button */}
+          <button
+            onClick={logout}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50/50 dark:bg-rose-950/30 text-rose-600 dark:text-rose-400 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-xs font-bold transition-colors cursor-pointer"
+            title="Se déconnecter de l'entreprise"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Déconnexion</span>
+          </button>
         </div>
       </div>
     </header>
