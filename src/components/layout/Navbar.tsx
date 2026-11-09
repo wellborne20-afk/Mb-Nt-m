@@ -50,6 +50,7 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar }) => {
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
   const roleLabels: Record<UserRole, string> = {
+    superadmin: language === 'fr' ? 'Super Administrateur' : 'Super Administrator',
     owner: language === 'fr' ? 'Dirigeant / Propriétaire' : 'Owner / Director',
     director: language === 'fr' ? 'Directeur Général' : 'General Manager',
     accountant: language === 'fr' ? 'Chef Comptable' : 'Accountant',

@@ -298,14 +298,20 @@ export const DashboardModule: React.FC = () => {
                 {language === 'fr' ? 'Principaux postes de dépenses' : 'Major Expense Posts'}
               </h4>
               <div className="space-y-2.5">
-                {sortedExpenses.slice(0, 4).map(([cat, amt]) => (
-                  <div key={cat} className="flex items-center justify-between text-xs">
-                    <span className="text-slate-600 dark:text-slate-300 font-medium">{cat}</span>
-                    <span className="font-bold text-slate-900 dark:text-white">
-                      {formatCurrency(amt, currency)}
-                    </span>
+                {sortedExpenses.length === 0 ? (
+                  <div className="text-xs text-slate-400 italic py-2">
+                    {language === 'fr' ? 'Aucune dépense enregistrée. Comptes neufs à 0 FCFA.' : 'No expenses recorded yet. Fresh zero balance.'}
                   </div>
-                ))}
+                ) : (
+                  sortedExpenses.slice(0, 4).map(([cat, amt]) => (
+                    <div key={cat} className="flex items-center justify-between text-xs">
+                      <span className="text-slate-600 dark:text-slate-300 font-medium">{cat}</span>
+                      <span className="font-bold text-slate-900 dark:text-white">
+                        {formatCurrency(amt, currency)}
+                      </span>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -318,45 +324,66 @@ export const DashboardModule: React.FC = () => {
               </h3>
               <button
                 onClick={() => setActiveModule('finances')}
-                className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold"
+                className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold cursor-pointer"
               >
                 Voir tout le journal →
               </button>
             </div>
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
-              {transactions.slice(0, 5).map(tx => (
-                <div key={tx.id} className="py-3 flex items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-3">
-                    <div
-                      className={`p-2 rounded-xl ${
-                        tx.type === 'income'
-                          ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400'
-                          : 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400'
-                      }`}
-                    >
-                      {tx.type === 'income' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
-                    </div>
-                    <div>
-                      <div className="font-bold text-slate-900 dark:text-white">{tx.description}</div>
-                      <div className="text-[11px] text-slate-400">
-                        {formatDate(tx.date, language)} • {tx.partyName}
+              {transactions.length === 0 ? (
+                <div className="py-8 text-center text-xs text-slate-400 space-y-2">
+                  <Wallet className="w-8 h-8 text-slate-300 dark:text-slate-700 mx-auto opacity-60" />
+                  <p className="font-bold text-slate-600 dark:text-slate-300">
+                    {language === 'fr' ? 'Aucune opération enregistrée pour le moment' : 'No recorded transactions yet'}
+                  </p>
+                  <p className="text-[11px] text-slate-400 max-w-sm mx-auto">
+                    {language === 'fr'
+                      ? 'Votre entreprise démarre avec des comptes à zéro. Enregistrez votre premier flux de caisse ou Mobile Money.'
+                      : 'Your company starts with fresh zero accounts. Record your first cash movement.'}
+                  </p>
+                  <button
+                    onClick={() => setActiveModule('finances')}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors mt-1"
+                  >
+                    <PlusCircle className="w-3.5 h-3.5" />
+                    <span>{language === 'fr' ? 'Saisir une première opération' : 'New cash movement'}</span>
+                  </button>
+                </div>
+              ) : (
+                transactions.slice(0, 5).map(tx => (
+                  <div key={tx.id} className="py-3 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`p-2 rounded-xl ${
+                          tx.type === 'income'
+                            ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400'
+                            : 'bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400'
+                        }`}
+                      >
+                        {tx.type === 'income' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownRight className="w-4 h-4" />}
+                      </div>
+                      <div>
+                        <div className="font-bold text-slate-900 dark:text-white">{tx.description}</div>
+                        <div className="text-[11px] text-slate-400">
+                          {formatDate(tx.date, language)} • {tx.partyName}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <div
-                      className={`font-black ${
-                        tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'
-                      }`}
-                    >
-                      {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.paidAmount, currency)}
+                    <div className="text-right">
+                      <div
+                        className={`font-black ${
+                          tx.type === 'income' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'
+                        }`}
+                      >
+                        {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.paidAmount, currency)}
+                      </div>
+                      <Badge variant={tx.status === 'paid' ? 'success' : 'warning'}>
+                        {tx.status === 'paid' ? 'Payé' : 'Acompte'}
+                      </Badge>
                     </div>
-                    <Badge variant={tx.status === 'paid' ? 'success' : 'warning'}>
-                      {tx.status === 'paid' ? 'Payé' : 'Acompte'}
-                    </Badge>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -372,26 +399,32 @@ export const DashboardModule: React.FC = () => {
               <Badge variant="warning">{notifications.length}</Badge>
             </div>
             <div className="space-y-3">
-              {notifications.map(n => (
-                <div
-                  key={n.id}
-                  className="p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 space-y-1"
-                >
-                  <div className="font-bold text-xs text-slate-900 dark:text-white">{n.title}</div>
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-                    {n.message}
-                  </p>
-                  <div className="pt-1 flex justify-between items-center text-[10px]">
-                    <span className="text-slate-400">{formatDate(n.date, language)}</span>
-                    <button
-                      onClick={() => n.linkModule && setActiveModule(n.linkModule)}
-                      className="font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
-                    >
-                      Traiter →
-                    </button>
-                  </div>
+              {notifications.length === 0 ? (
+                <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 text-center text-xs text-slate-400">
+                  {language === 'fr' ? 'Toutes les alertes sont au vert. Aucune anomalie détectée.' : 'All clear. No alerts detected.'}
                 </div>
-              ))}
+              ) : (
+                notifications.map(n => (
+                  <div
+                    key={n.id}
+                    className="p-3 rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 space-y-1"
+                  >
+                    <div className="font-bold text-xs text-slate-900 dark:text-white">{n.title}</div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                      {n.message}
+                    </p>
+                    <div className="pt-1 flex justify-between items-center text-[10px]">
+                      <span className="text-slate-400">{formatDate(n.date, language)}</span>
+                      <button
+                        onClick={() => n.linkModule && setActiveModule(n.linkModule)}
+                        className="font-bold text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                      >
+                        Traiter →
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 

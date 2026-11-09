@@ -266,8 +266,17 @@ export const HumanResourcesModule: React.FC = () => {
           </div>
 
           {/* Employees Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredEmployees.map(emp => (
+          {filteredEmployees.length === 0 ? (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-12 text-center">
+              <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+              <h4 className="font-bold text-slate-700 dark:text-slate-200 text-sm">Aucun collaborateur enregistré</h4>
+              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                Votre entreprise démarre à zéro. Cliquez sur « Nouveau Collaborateur » en haut à droite pour ajouter vos employés.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredEmployees.map(emp => (
               <div
                 key={emp.id}
                 className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 shadow-xs hover:shadow-md transition-shadow space-y-4"
@@ -324,6 +333,7 @@ export const HumanResourcesModule: React.FC = () => {
               </div>
             ))}
           </div>
+          )}
         </div>
       )}
 

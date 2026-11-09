@@ -260,7 +260,15 @@ export const InvoicingModule: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredInvoices.map(inv => (
+              {filteredInvoices.length === 0 ? (
+                <tr>
+                  <td colSpan={9} className="px-4 py-12 text-center text-slate-400">
+                    <p className="font-semibold text-slate-600 dark:text-slate-300">Aucune facture ou devis enregistré</p>
+                    <p className="text-xs text-slate-400 mt-1">Cliquez sur « Nouvelle Pièce » ci-dessus pour émettre votre première facture ou devis.</p>
+                  </td>
+                </tr>
+              ) : (
+                filteredInvoices.map(inv => (
                 <tr key={inv.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
                   <td className="px-4 py-3 whitespace-nowrap">
                     <div className="font-mono font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
@@ -356,7 +364,8 @@ export const InvoicingModule: React.FC = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+              ))
+              )}
             </tbody>
           </table>
         </div>

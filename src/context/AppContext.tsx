@@ -154,7 +154,18 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-const STORAGE_PREFIX = 'mbantam_erp_v1_';
+const STORAGE_PREFIX = 'mbantam_erp_v2_zero_';
+
+// Clean up old mock data from previous version if present
+try {
+  Object.keys(localStorage).forEach(k => {
+    if (k.startsWith('mbantam_erp_v1_')) {
+      localStorage.removeItem(k);
+    }
+  });
+} catch {
+  // Ignore in SSR/restricted environments
+}
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Load state or default to initial mock data
@@ -521,8 +532,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       tenantId: newTenantId,
       name: `Caisse Principale (${tenantData.city || 'Siège'})`,
       type: 'cash',
-      balance: 200000,
-      initialBalance: 200000,
+      balance: 0,
+      initialBalance: 0,
       currency: tenantData.currency || 'XAF',
     };
 
