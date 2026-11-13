@@ -15,10 +15,19 @@ import {
   CrmDeal,
   AuditLog,
   AppNotification,
-  ERPModuleId
+  ERPModuleId,
+  CompanyPosition,
+  WorkspaceTask,
+  WorkspaceMessage,
+  DailyWorkReport
 } from '../types';
 
 export const defaultModulesCatalog: Record<ERPModuleId, { name: string; description: string; monthlyPrice: number }> = {
+  workspace: {
+    name: 'Espace de Travail & Tâches',
+    description: 'Transmission d’informations internes, gestion des tâches par poste, rappels, relances de correction et rapports journaliers',
+    monthlyPrice: 10000,
+  },
   finances: {
     name: 'Journal Financier & Caisse',
     description: 'Suivi journalier, entrées/sorties, caisses physiques, Mobile Money (MTN/Orange), clôtures et prévisions',
@@ -77,6 +86,7 @@ export const initialTenants: Tenant[] = [
     expiresAt: '2026-11-30',
     createdAt: '2024-01-15',
     modules: {
+      workspace: { moduleId: 'workspace', name: 'Espace de Travail & Tâches', description: defaultModulesCatalog.workspace.description, isEnabled: true, expiresAt: '2026-11-30', monthlyPrice: 10000 },
       finances: { moduleId: 'finances', name: 'Journal Financier & Caisse', description: defaultModulesCatalog.finances.description, isEnabled: true, expiresAt: '2026-11-30', monthlyPrice: 15000 },
       invoices: { moduleId: 'invoices', name: 'Facturation & Devis', description: defaultModulesCatalog.invoices.description, isEnabled: true, expiresAt: '2026-11-30', monthlyPrice: 10000 },
       hr: { moduleId: 'hr', name: 'Ressources Humaines', description: defaultModulesCatalog.hr.description, isEnabled: true, expiresAt: '2026-11-30', monthlyPrice: 15000 },
@@ -106,6 +116,7 @@ export const initialTenants: Tenant[] = [
     expiresAt: '2026-11-15',
     createdAt: '2025-05-10',
     modules: {
+      workspace: { moduleId: 'workspace', name: 'Espace de Travail & Tâches', description: defaultModulesCatalog.workspace.description, isEnabled: true, expiresAt: '2026-11-15', monthlyPrice: 10000 },
       finances: { moduleId: 'finances', name: 'Journal Financier & Caisse', description: defaultModulesCatalog.finances.description, isEnabled: true, expiresAt: '2026-11-15', monthlyPrice: 15000 },
       invoices: { moduleId: 'invoices', name: 'Facturation & Devis', description: defaultModulesCatalog.invoices.description, isEnabled: true, expiresAt: '2026-11-15', monthlyPrice: 10000 },
       hr: { moduleId: 'hr', name: 'Ressources Humaines', description: defaultModulesCatalog.hr.description, isEnabled: false, expiresAt: '2026-10-01', monthlyPrice: 15000 },
@@ -114,7 +125,7 @@ export const initialTenants: Tenant[] = [
       crm: { moduleId: 'crm', name: 'CRM & Pipeline Commercial', description: defaultModulesCatalog.crm.description, isEnabled: false, expiresAt: '2026-10-01', monthlyPrice: 10000 },
       reports: { moduleId: 'reports', name: 'Bilans & Analyses Financières', description: defaultModulesCatalog.reports.description, isEnabled: false, expiresAt: '2026-10-01', monthlyPrice: 10000 },
     },
-    notes: 'Abonnement sur-mesure : Uniquement Caisse + Facturation.',
+    notes: 'Abonnement sur-mesure : Uniquement Caisse + Facturation + Espace Travail.',
   },
   {
     id: 'tenant-bassa-exp',
@@ -135,6 +146,7 @@ export const initialTenants: Tenant[] = [
     expiresAt: '2026-10-01', // Date expirée !
     createdAt: '2026-06-01',
     modules: {
+      workspace: { moduleId: 'workspace', name: 'Espace de Travail & Tâches', description: defaultModulesCatalog.workspace.description, isEnabled: true, expiresAt: '2026-10-01', monthlyPrice: 10000 },
       finances: { moduleId: 'finances', name: 'Journal Financier & Caisse', description: defaultModulesCatalog.finances.description, isEnabled: true, expiresAt: '2026-10-01', monthlyPrice: 15000 },
       invoices: { moduleId: 'invoices', name: 'Facturation & Devis', description: defaultModulesCatalog.invoices.description, isEnabled: true, expiresAt: '2026-10-01', monthlyPrice: 10000 },
       hr: { moduleId: 'hr', name: 'Ressources Humaines', description: defaultModulesCatalog.hr.description, isEnabled: false, expiresAt: '2026-10-01', monthlyPrice: 15000 },
@@ -315,3 +327,8 @@ export const initialCrmDeals: CrmDeal[] = [];
 export const initialAuditLogs: AuditLog[] = [];
 
 export const initialNotifications: AppNotification[] = [];
+
+export const initialPositions: CompanyPosition[] = [];
+export const initialWorkspaceTasks: WorkspaceTask[] = [];
+export const initialWorkspaceMessages: WorkspaceMessage[] = [];
+export const initialDailyReports: DailyWorkReport[] = [];

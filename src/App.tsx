@@ -8,6 +8,7 @@ import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
 import { DashboardModule } from './components/dashboard/DashboardModule';
+import { WorkspaceModule } from './components/workspace/WorkspaceModule';
 import { CashJournalModule } from './components/finances/CashJournalModule';
 import { InvoicingModule } from './components/invoices/InvoicingModule';
 import { HumanResourcesModule } from './components/hr/HumanResourcesModule';
@@ -38,6 +39,7 @@ const MainLayout: React.FC = () => {
   const renderModule = () => {
     // Check if the current module is locked (expired or not subscribed)
     const subscriptionControlledModules: ERPModuleId[] = [
+      'workspace',
       'finances',
       'invoices',
       'hr',
@@ -56,6 +58,8 @@ const MainLayout: React.FC = () => {
     switch (activeModule) {
       case 'dashboard':
         return <DashboardModule />;
+      case 'workspace':
+        return <WorkspaceModule />;
       case 'finances':
         return <CashJournalModule />;
       case 'invoices':

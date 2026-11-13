@@ -350,7 +350,8 @@ export const SuperAdminDashboard: React.FC = () => {
                                 }`}
                                 title={`${mod.name} (${mod.isEnabled ? `Expire le ${mod.expiresAt}` : 'Désactivé'})`}
                               >
-                                {mod.moduleId === 'finances' ? 'Caisse' :
+                                {mod.moduleId === 'workspace' ? 'Espace Travail' :
+                                 mod.moduleId === 'finances' ? 'Caisse' :
                                  mod.moduleId === 'invoices' ? 'Facturation' :
                                  mod.moduleId === 'hr' ? 'RH' :
                                  mod.moduleId === 'payroll' ? 'Paie CMR' :

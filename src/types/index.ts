@@ -2,7 +2,7 @@ export type Currency = 'XAF' | 'XOF' | 'EUR' | 'USD';
 export type Language = 'fr' | 'en';
 export type UserRole = 'superadmin' | 'owner' | 'director' | 'accountant' | 'hr' | 'sales' | 'employee';
 
-export type ERPModuleId = 'finances' | 'invoices' | 'hr' | 'payroll' | 'assets' | 'crm' | 'reports';
+export type ERPModuleId = 'workspace' | 'finances' | 'invoices' | 'hr' | 'payroll' | 'assets' | 'crm' | 'reports';
 
 export interface ModuleSubscription {
   moduleId: ERPModuleId;
@@ -333,4 +333,87 @@ export interface AppNotification {
   date: string;
   isRead: boolean;
   linkModule?: string;
+}
+
+// ==========================================
+// ESPACE DE TRAVAIL, POSTES & TÂCHES INTERNES
+// ==========================================
+
+export interface CompanyPosition {
+  id: string;
+  tenantId: string;
+  title: string; // Défini manuellement par chaque entreprise (ex: Caissier, Livreur, Chef Chantier...)
+  department: string;
+  assigneeName?: string; // Personne occupant le poste
+  assigneePhone?: string;
+  description?: string;
+  createdAt: string;
+  isArchived?: boolean;
+}
+
+export type TaskPriority = 'low' | 'normal' | 'high' | 'urgent';
+export type TaskStatus = 'todo' | 'in_progress' | 'done_pending_validation' | 'validated' | 'correction_needed';
+
+export interface TaskComment {
+  id: string;
+  authorName: string;
+  authorPosition?: string;
+  text: string;
+  type: 'info' | 'reminder' | 'correction' | 'validation';
+  createdAt: string;
+}
+
+export interface WorkspaceTask {
+  id: string;
+  tenantId: string;
+  title: string;
+  description: string; // Espace de texte détaillé transmis
+  assignedPositionId?: string;
+  assignedPositionName: string;
+  assignedToName: string; // Nom de la personne ciblée
+  createdByName: string;
+  priority: TaskPriority;
+  dueDate: string; // YYYY-MM-DD
+  createdDate: string; // YYYY-MM-DD (permet de distinguer les tâches des jours précédents vs aujourd'hui)
+  status: TaskStatus;
+  isCheckedDone: boolean; // Case à cocher derrière la tâche
+  completedAt?: string;
+  completedBy?: string;
+  validatedAt?: string;
+  validatedBy?: string;
+  correctionNote?: string;
+  reminderCount: number;
+  lastReminderAt?: string;
+  comments: TaskComment[];
+  isArchived?: boolean;
+}
+
+export interface WorkspaceMessage {
+  id: string;
+  tenantId: string;
+  title: string;
+  content: string;
+  authorName: string;
+  targetPositionName: string; // 'Toute l’entreprise' ou nom d'un poste spécifique
+  priority: 'normal' | 'important';
+  acknowledgedBy: string[];
+  createdAt: string;
+  convertedToTaskId?: string;
+  isArchived?: boolean;
+}
+
+export interface DailyWorkReport {
+  id: string;
+  tenantId: string;
+  date: string; // YYYY-MM-DD
+  authorName: string;
+  positionFilter: string;
+  validatedCount: number;
+  pendingValidationCount: number;
+  remainingCount: number;
+  correctionCount: number;
+  doneItems: string[];
+  remainingItems: string[];
+  summaryNotes: string;
+  createdAt: string;
 }

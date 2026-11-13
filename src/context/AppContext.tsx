@@ -22,6 +22,11 @@ import {
   AppNotification,
   ERPModuleId,
   ModuleSubscription,
+  CompanyPosition,
+  WorkspaceTask,
+  TaskComment,
+  WorkspaceMessage,
+  DailyWorkReport,
 } from '../types';
 import {
   initialTenants,
@@ -40,6 +45,10 @@ import {
   initialCrmDeals,
   initialAuditLogs,
   initialNotifications,
+  initialPositions,
+  initialWorkspaceTasks,
+  initialWorkspaceMessages,
+  initialDailyReports,
   defaultModulesCatalog,
 } from '../data/mockData';
 
@@ -145,6 +154,31 @@ interface AppContextType {
   clearNotifications: () => void;
   addAuditLog: (action: string, module: string, details: string) => void;
 
+  // Workspace: Custom Positions, Tasks, Information Feed & Daily Reports
+  positions: CompanyPosition[];
+  addPosition: (data: Omit<CompanyPosition, 'id' | 'tenantId' | 'createdAt'>) => void;
+  updatePosition: (id: string, data: Partial<CompanyPosition>) => void;
+  archivePosition: (id: string) => void;
+
+  tasks: WorkspaceTask[];
+  addTask: (data: Omit<WorkspaceTask, 'id' | 'tenantId' | 'createdDate' | 'isCheckedDone' | 'reminderCount' | 'comments'>) => string;
+  updateTask: (id: string, data: Partial<WorkspaceTask>) => void;
+  toggleTaskCheck: (id: string, checked: boolean) => void;
+  validateTask: (id: string, note?: string) => void;
+  requestTaskCorrection: (id: string, correctionNote: string) => void;
+  sendTaskReminder: (id: string, customNote?: string) => void;
+  addTaskComment: (taskId: string, text: string, type?: TaskComment['type']) => void;
+  archiveTask: (id: string) => void;
+
+  workspaceMessages: WorkspaceMessage[];
+  addWorkspaceMessage: (data: Omit<WorkspaceMessage, 'id' | 'tenantId' | 'acknowledgedBy' | 'createdAt'>) => void;
+  acknowledgeWorkspaceMessage: (id: string) => void;
+  markMessageConvertedToTask: (messageId: string, taskId: string) => void;
+  archiveWorkspaceMessage: (id: string) => void;
+
+  dailyReports: DailyWorkReport[];
+  addDailyWorkReport: (data: Omit<DailyWorkReport, 'id' | 'tenantId' | 'createdAt'>) => void;
+
   // Backup & Reset
   clearAllTenantData: (tenantId: string) => void;
   exportFullBackup: () => string;
@@ -211,6 +245,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => loadStored('auditLogs', initialAuditLogs));
   const [notifications, setNotifications] = useState<AppNotification[]>(() => loadStored('notifications', initialNotifications));
 
+  const [positions, setPositions] = useState<CompanyPosition[]>(() => loadStored('positions', initialPositions));
+  const [tasks, setTasks] = useState<WorkspaceTask[]>(() => loadStored('workspaceTasks', initialWorkspaceTasks));
+  const [workspaceMessages, setWorkspaceMessages] = useState<WorkspaceMessage[]>(() => loadStored('workspaceMessages', initialWorkspaceMessages));
+  const [dailyReports, setDailyReports] = useState<DailyWorkReport[]>(() => loadStored('dailyReports', initialDailyReports));
+
+  // Ensure existing stored tenants gracefully get the 'workspace' module entry if missing
+  useEffect(() => {
+    setTenants(prev => {
+      let changed = false;
+      const updated = prev.map(t => {
+        if (t.modules && !t.modules.workspace) {
+          changed = true;
+          return {
+            ...t,
+            modules: {
+              ...t.modules,
+              workspace: {
+                moduleId: 'workspace' as ERPModuleId,
+                name: defaultModulesCatalog.workspace.name,
+                description: defaultModulesCatalog.workspace.description,
+                isEnabled: t.subscriptionStatus === 'active',
+                expiresAt: t.expiresAt,
+                monthlyPrice: defaultModulesCatalog.workspace.monthlyPrice,
+              },
+            },
+          };
+        }
+        return t;
+      });
+      return changed ? updated : prev;
+    });
+  }, []);
+
   // Sync to localStorage
   useEffect(() => {
     localStorage.setItem(STORAGE_PREFIX + 'currency', JSON.stringify(currency));
@@ -235,6 +302,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.setItem(STORAGE_PREFIX + 'auditLogs', JSON.stringify(auditLogs));
     localStorage.setItem(STORAGE_PREFIX + 'isAuthenticated', JSON.stringify(isAuthenticated));
     localStorage.setItem(STORAGE_PREFIX + 'notifications', JSON.stringify(notifications));
+    localStorage.setItem(STORAGE_PREFIX + 'positions', JSON.stringify(positions));
+    localStorage.setItem(STORAGE_PREFIX + 'workspaceTasks', JSON.stringify(tasks));
+    localStorage.setItem(STORAGE_PREFIX + 'workspaceMessages', JSON.stringify(workspaceMessages));
+    localStorage.setItem(STORAGE_PREFIX + 'dailyReports', JSON.stringify(dailyReports));
 
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -245,7 +316,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     isAuthenticated,
     currency, language, darkMode, tenants, currentTenantId, users, currentRole,
     accounts, transactions, dailyClosings, budgets, invoices, employees, leaves,
-    payrolls, assets, assetAssignments, customers, crmDeals, auditLogs, notifications
+    payrolls, assets, assetAssignments, customers, crmDeals, auditLogs, notifications,
+    positions, tasks, workspaceMessages, dailyReports
   ]);
 
   const currentTenant = tenants.find(t => t.id === currentTenantId) || tenants[0];
@@ -272,11 +344,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const toggleDarkMode = () => setDarkMode(prev => !prev);
 
   const login = (tenantId: string, email: string, role: UserRole) => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const hasRemainingPriorityTasks = tasks.some(
+      t =>
+        !t.isArchived &&
+        t.tenantId === tenantId &&
+        t.status !== 'validated' &&
+        (t.createdDate < todayStr || t.dueDate < todayStr || t.status === 'correction_needed')
+    );
+
     setCurrentTenantId(tenantId);
     setCurrentRole(role);
     setIsSuperAdminSession(false);
     setIsImpersonating(false);
     setIsAuthenticated(true);
+    setActiveModule(role === 'employee' || hasRemainingPriorityTasks ? 'workspace' : 'dashboard');
     addAuditLog('Connexion réussie', 'Authentification', `Connexion de ${email} (Rôle: ${role})`);
   };
 
@@ -914,6 +996,276 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
   };
 
+  // ==========================================
+  // WORKSPACE: POSTES, TÂCHES, TRANSMISSIONS & RAPPORTS
+  // ==========================================
+
+  const addPosition = (data: Omit<CompanyPosition, 'id' | 'tenantId' | 'createdAt'>) => {
+    const newPos: CompanyPosition = {
+      ...data,
+      id: `pos-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      tenantId: currentTenant.id,
+      createdAt: new Date().toISOString(),
+    };
+    setPositions(prev => [...prev, newPos]);
+    addAuditLog('Création poste de travail', 'Espace de Travail', `Nouveau poste défini : ${data.title} (${data.department})`);
+  };
+
+  const updatePosition = (id: string, data: Partial<CompanyPosition>) => {
+    setPositions(prev => prev.map(p => p.id === id ? { ...p, ...data } : p));
+    addAuditLog('Modification poste de travail', 'Espace de Travail', `Mise à jour du poste #${id}`);
+  };
+
+  const archivePosition = (id: string) => {
+    setPositions(prev => prev.map(p => p.id === id ? { ...p, isArchived: true } : p));
+    addAuditLog('Archivage poste de travail', 'Espace de Travail', `Poste #${id} archivé`);
+  };
+
+  const addTask = (
+    data: Omit<WorkspaceTask, 'id' | 'tenantId' | 'createdDate' | 'isCheckedDone' | 'reminderCount' | 'comments'>
+  ): string => {
+    const today = new Date().toISOString().split('T')[0];
+    const id = `task-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const newTask: WorkspaceTask = {
+      ...data,
+      id,
+      tenantId: currentTenant.id,
+      createdDate: today,
+      isCheckedDone: false,
+      reminderCount: 0,
+      comments: [],
+    };
+    setTasks(prev => [newTask, ...prev]);
+
+    setNotifications(prev => [{
+      id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      tenantId: currentTenant.id,
+      title: `Nouvelle tâche : ${data.assignedPositionName}`,
+      message: `${data.title}${data.assignedToName ? ` — Assignée à ${data.assignedToName}` : ''}`,
+      type: data.priority === 'urgent' ? 'danger' : 'info',
+      date: new Date().toISOString(),
+      isRead: false,
+      linkModule: 'workspace',
+    }, ...prev]);
+
+    addAuditLog('Transmission d’une tâche', 'Espace de Travail', `"${data.title}" assignée à ${data.assignedPositionName}`);
+    return id;
+  };
+
+  const updateTask = (id: string, data: Partial<WorkspaceTask>) => {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...data } : t));
+    addAuditLog('Modification de tâche', 'Espace de Travail', `Mise à jour tâche #${id}`);
+  };
+
+  const toggleTaskCheck = (id: string, checked: boolean) => {
+    const now = new Date().toISOString();
+    setTasks(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      const nextStatus: WorkspaceTask['status'] = checked ? 'done_pending_validation' : 'todo';
+      return {
+        ...t,
+        isCheckedDone: checked,
+        status: nextStatus,
+        completedAt: checked ? now : undefined,
+        completedBy: checked ? currentUser.name : undefined,
+      };
+    }));
+    addAuditLog(
+      checked ? 'Tâche cochée comme réalisée' : 'Tâche réouverte',
+      'Espace de Travail',
+      `Tâche #${id} marquée ${checked ? 'réalisée (en attente validation)' : 'à faire'}`
+    );
+  };
+
+  const validateTask = (id: string, note?: string) => {
+    const now = new Date().toISOString();
+    setTasks(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      const newComments: TaskComment[] = note
+        ? [
+            ...t.comments,
+            {
+              id: `cmt-${Date.now()}`,
+              authorName: currentUser.name,
+              text: note,
+              type: 'validation',
+              createdAt: now,
+            },
+          ]
+        : t.comments;
+      return {
+        ...t,
+        isCheckedDone: true,
+        status: 'validated',
+        completedAt: t.completedAt || now,
+        completedBy: t.completedBy || currentUser.name,
+        validatedAt: now,
+        validatedBy: currentUser.name,
+        correctionNote: undefined,
+        comments: newComments,
+      };
+    }));
+    addAuditLog('Validation finale de tâche', 'Espace de Travail', `Tâche #${id} finalisée et validée par ${currentUser.name}`);
+  };
+
+  const requestTaskCorrection = (id: string, correctionNote: string) => {
+    const now = new Date().toISOString();
+    const targetTask = tasks.find(t => t.id === id);
+    setTasks(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      return {
+        ...t,
+        isCheckedDone: false,
+        status: 'correction_needed',
+        correctionNote,
+        reminderCount: t.reminderCount + 1,
+        lastReminderAt: now,
+        comments: [
+          ...t.comments,
+          {
+            id: `cmt-${Date.now()}`,
+            authorName: currentUser.name,
+            text: `Relance de correction : ${correctionNote}`,
+            type: 'correction',
+            createdAt: now,
+          },
+        ],
+      };
+    }));
+
+    if (targetTask) {
+      setNotifications(prev => [{
+        id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        tenantId: currentTenant.id,
+        title: `Correction demandée : ${targetTask.title}`,
+        message: `${correctionNote} (${targetTask.assignedPositionName}${targetTask.assignedToName ? ` - ${targetTask.assignedToName}` : ''})`,
+        type: 'danger',
+        date: now,
+        isRead: false,
+        linkModule: 'workspace',
+      }, ...prev]);
+    }
+    addAuditLog('Relance de correction sur tâche', 'Espace de Travail', `Tâche #${id} renvoyée en correction : ${correctionNote}`);
+  };
+
+  const sendTaskReminder = (id: string, customNote?: string) => {
+    const now = new Date().toISOString();
+    const targetTask = tasks.find(t => t.id === id);
+    const noteText = customNote || 'Rappel envoyé : merci de finaliser cette tâche en priorité.';
+    setTasks(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      return {
+        ...t,
+        reminderCount: t.reminderCount + 1,
+        lastReminderAt: now,
+        comments: [
+          ...t.comments,
+          {
+            id: `cmt-${Date.now()}`,
+            authorName: currentUser.name,
+            text: noteText,
+            type: 'reminder',
+            createdAt: now,
+          },
+        ],
+      };
+    }));
+
+    if (targetTask) {
+      setNotifications(prev => [{
+        id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        tenantId: currentTenant.id,
+        title: `Rappel tâche (${targetTask.reminderCount + 1}) : ${targetTask.title}`,
+        message: `${noteText} — Destinataire : ${targetTask.assignedPositionName}`,
+        type: 'warning',
+        date: now,
+        isRead: false,
+        linkModule: 'workspace',
+      }, ...prev]);
+    }
+    addAuditLog('Envoi rappel tâche', 'Espace de Travail', `Rappel envoyé sur tâche #${id}`);
+  };
+
+  const addTaskComment = (taskId: string, text: string, type: TaskComment['type'] = 'info') => {
+    const now = new Date().toISOString();
+    setTasks(prev => prev.map(t => {
+      if (t.id !== taskId) return t;
+      return {
+        ...t,
+        comments: [
+          ...t.comments,
+          {
+            id: `cmt-${Date.now()}`,
+            authorName: currentUser.name,
+            text,
+            type,
+            createdAt: now,
+          },
+        ],
+      };
+    }));
+  };
+
+  const archiveTask = (id: string) => {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, isArchived: true } : t));
+    addAuditLog('Archivage tâche', 'Espace de Travail', `Tâche #${id} archivée`);
+  };
+
+  const addWorkspaceMessage = (
+    data: Omit<WorkspaceMessage, 'id' | 'tenantId' | 'acknowledgedBy' | 'createdAt'>
+  ) => {
+    const now = new Date().toISOString();
+    const newMsg: WorkspaceMessage = {
+      ...data,
+      id: `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      tenantId: currentTenant.id,
+      acknowledgedBy: [currentUser.name],
+      createdAt: now,
+    };
+    setWorkspaceMessages(prev => [newMsg, ...prev]);
+
+    setNotifications(prev => [{
+      id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      tenantId: currentTenant.id,
+      title: `Info transmise : ${data.title}`,
+      message: `${data.content.slice(0, 90)}${data.content.length > 90 ? '...' : ''}`,
+      type: data.priority === 'important' ? 'warning' : 'info',
+      date: now,
+      isRead: false,
+      linkModule: 'workspace',
+    }, ...prev]);
+
+    addAuditLog('Transmission information interne', 'Espace de Travail', `Note "${data.title}" destinée à ${data.targetPositionName}`);
+  };
+
+  const acknowledgeWorkspaceMessage = (id: string) => {
+    setWorkspaceMessages(prev => prev.map(m => {
+      if (m.id !== id) return m;
+      if (m.acknowledgedBy.includes(currentUser.name)) return m;
+      return { ...m, acknowledgedBy: [...m.acknowledgedBy, currentUser.name] };
+    }));
+  };
+
+  const markMessageConvertedToTask = (messageId: string, taskId: string) => {
+    setWorkspaceMessages(prev => prev.map(m => m.id === messageId ? { ...m, convertedToTaskId: taskId } : m));
+  };
+
+  const archiveWorkspaceMessage = (id: string) => {
+    setWorkspaceMessages(prev => prev.map(m => m.id === id ? { ...m, isArchived: true } : m));
+    addAuditLog('Archivage note d’information', 'Espace de Travail', `Note #${id} archivée`);
+  };
+
+  const addDailyWorkReport = (data: Omit<DailyWorkReport, 'id' | 'tenantId' | 'createdAt'>) => {
+    const newReport: DailyWorkReport = {
+      ...data,
+      id: `rep-${Date.now()}`,
+      tenantId: currentTenant.id,
+      createdAt: new Date().toISOString(),
+    };
+    setDailyReports(prev => [newReport, ...prev]);
+    addAuditLog('Enregistrement rapport journalier', 'Espace de Travail', `Rapport du ${data.date} (${data.validatedCount} validée(s), ${data.remainingCount} restante(s))`);
+  };
+
   // Backup & Restore
   const exportFullBackup = (): string => {
     const backupData = {
@@ -933,6 +1285,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       assetAssignments,
       customers,
       crmDeals,
+      positions,
+      tasks,
+      workspaceMessages,
+      dailyReports,
       auditLogs,
     };
     addAuditLog('Export sauvegarde complète', 'Sécurité & Système', 'Génération d’une sauvegarde JSON intégrale');
@@ -958,6 +1314,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (data.assetAssignments) setAssetAssignments(data.assetAssignments);
       if (data.customers) setCustomers(data.customers);
       if (data.crmDeals) setCrmDeals(data.crmDeals);
+      if (data.positions) setPositions(data.positions);
+      if (data.tasks) setTasks(data.tasks);
+      if (data.workspaceMessages) setWorkspaceMessages(data.workspaceMessages);
+      if (data.dailyReports) setDailyReports(data.dailyReports);
       if (data.auditLogs) setAuditLogs(data.auditLogs);
 
       addAuditLog('Restauration sauvegarde complète', 'Sécurité & Système', 'Import réussi des données');
@@ -988,6 +1348,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     // Remove all customers
     setCustomers(prev => prev.filter(c => c.tenantId !== tenantId));
     setCrmDeals(prev => prev.filter(d => d.tenantId !== tenantId));
+    // Remove all workspace data
+    setPositions(prev => prev.filter(p => p.tenantId !== tenantId));
+    setTasks(prev => prev.filter(t => t.tenantId !== tenantId));
+    setWorkspaceMessages(prev => prev.filter(m => m.tenantId !== tenantId));
+    setDailyReports(prev => prev.filter(r => r.tenantId !== tenantId));
     // Reset budgets
     setBudgets(prev => prev.map(b => b.tenantId === tenantId ? { ...b, currentSpent: 0 } : b));
 
@@ -1009,6 +1374,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setAssetAssignments(initialAssetAssignments);
     setCustomers(initialCustomers);
     setCrmDeals(initialCrmDeals);
+    setPositions(initialPositions);
+    setTasks(initialWorkspaceTasks);
+    setWorkspaceMessages(initialWorkspaceMessages);
+    setDailyReports(initialDailyReports);
     setAuditLogs(initialAuditLogs);
     setNotifications(initialNotifications);
     addAuditLog('Réinitialisation données de démo', 'Système', 'Rétablissement complet du jeu de démonstration camerounais');
@@ -1091,6 +1460,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         markNotificationRead,
         clearNotifications,
         addAuditLog,
+        positions: positions.filter(p => !p.isArchived && p.tenantId === currentTenant.id),
+        addPosition,
+        updatePosition,
+        archivePosition,
+        tasks: tasks.filter(t => !t.isArchived && t.tenantId === currentTenant.id),
+        addTask,
+        updateTask,
+        toggleTaskCheck,
+        validateTask,
+        requestTaskCorrection,
+        sendTaskReminder,
+        addTaskComment,
+        archiveTask,
+        workspaceMessages: workspaceMessages.filter(m => !m.isArchived && m.tenantId === currentTenant.id),
+        addWorkspaceMessage,
+        acknowledgeWorkspaceMessage,
+        markMessageConvertedToTask,
+        archiveWorkspaceMessage,
+        dailyReports: dailyReports.filter(r => r.tenantId === currentTenant.id),
+        addDailyWorkReport,
         exportFullBackup,
         importFullBackup,
         clearAllTenantData,

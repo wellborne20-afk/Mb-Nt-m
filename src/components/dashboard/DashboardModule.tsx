@@ -15,7 +15,10 @@ import {
   Calendar,
   Users,
   CheckCircle2,
-  PhoneCall
+  PhoneCall,
+  ClipboardList,
+  CheckSquare,
+  Square
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { StatCard } from '../common/StatCard';
@@ -33,10 +36,19 @@ export const DashboardModule: React.FC = () => {
     currency,
     language,
     setActiveModule,
-    notifications
+    notifications,
+    tasks,
+    toggleTaskCheck,
+    isModuleAccessible
   } = useApp();
 
   const [period, setPeriod] = useState<'today' | 'week' | 'month' | 'year'>('month');
+
+  const today = new Date().toISOString().split('T')[0];
+  const pendingPriorityTasks = tasks.filter(t => t.status !== 'validated');
+  const carryOverOrCorrectionTasks = pendingPriorityTasks.filter(
+    t => t.createdDate < today || t.dueDate < today || t.status === 'correction_needed'
+  );
 
   // Calculations
   const totalCashBalance = accounts.reduce((acc, a) => acc + a.balance, 0);
@@ -84,9 +96,18 @@ export const DashboardModule: React.FC = () => {
 
         {/* Quick Action Buttons */}
         <div className="flex items-center gap-2 flex-wrap">
+          {isModuleAccessible('workspace') && (
+            <button
+              onClick={() => setActiveModule('workspace')}
+              className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+            >
+              <ClipboardList className="w-4 h-4" />
+              <span>{language === 'fr' ? 'Espace de Travail' : 'Workspace'}</span>
+            </button>
+          )}
           <button
             onClick={() => setActiveModule('finances')}
-            className="flex items-center gap-2 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+            className="flex items-center gap-2 px-3 py-2 bg-slate-900 dark:bg-slate-800 hover:bg-slate-800 text-white rounded-xl text-xs font-bold border border-slate-700 transition-all cursor-pointer"
           >
             <PlusCircle className="w-4 h-4" />
             <span>{language === 'fr' ? 'Saisie Caisse' : 'Cash Entry'}</span>
@@ -100,6 +121,59 @@ export const DashboardModule: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Priority Carry-over / Pending Tasks Widget on Login */}
+      {isModuleAccessible('workspace') && pendingPriorityTasks.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800/70 rounded-2xl overflow-hidden">
+          <div className="px-5 py-3.5 bg-amber-50/60 dark:bg-amber-950/20 border-b border-amber-200 dark:border-amber-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <span>
+                  À traiter en priorité avant les nouvelles tâches ({pendingPriorityTasks.length})
+                </span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {carryOverOrCorrectionTasks.length > 0
+                  ? `${carryOverOrCorrectionTasks.length} tâche(s) reportée(s), en retard ou nécessitant une correction.`
+                  : 'Cochez vos tâches réalisées et transmettez vos validations dans l’Espace de Travail.'}
+              </p>
+            </div>
+            <button
+              onClick={() => setActiveModule('workspace')}
+              className="px-3.5 py-1.5 bg-slate-900 dark:bg-emerald-600 text-white rounded-xl text-xs font-bold hover:opacity-90 cursor-pointer whitespace-nowrap self-start sm:self-auto"
+            >
+              Ouvrir l’Espace de Travail →
+            </button>
+          </div>
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
+            {pendingPriorityTasks.slice(0, 4).map(t => (
+              <div key={t.id} className="px-5 py-3 flex items-center justify-between gap-3 text-xs">
+                <div className="min-w-0">
+                  <div className="font-bold text-slate-900 dark:text-white truncate">{t.title}</div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Poste : {t.assignedPositionName}
+                    {t.assignedToName ? ` · ${t.assignedToName}` : ''} · Échéance : {formatDate(t.dueDate, language)}
+                    {t.status === 'correction_needed' && ' · Correction demandée'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleTaskCheck(t.id, !t.isCheckedDone)}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-[11px] font-bold cursor-pointer shrink-0 ${
+                    t.isCheckedDone
+                      ? 'bg-emerald-600 border-emerald-600 text-white'
+                      : 'border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-emerald-500'
+                  }`}
+                >
+                  {t.isCheckedDone ? <CheckSquare className="w-3.5 h-3.5" /> : <Square className="w-3.5 h-3.5" />}
+                  <span>{t.isCheckedDone ? 'Réalisée' : 'Cocher fait'}</span>
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Subscription Status Banner if expired or near expiry */}
       {(currentTenant.subscriptionStatus === 'expired' || currentTenant.expiresAt < new Date().toISOString().split('T')[0]) && (

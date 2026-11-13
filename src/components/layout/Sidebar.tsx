@@ -17,7 +17,8 @@ import {
   HelpCircle,
   Crown,
   Lock,
-  ArrowLeft
+  ArrowLeft,
+  ClipboardList
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { ERPModuleId } from '../../types';
@@ -38,14 +39,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     isModuleAccessible,
     isSuperAdmin,
     isImpersonating,
-    superAdminReturnToConsole
+    superAdminReturnToConsole,
+    tasks
   } = useApp();
+
+  const pendingTasksCount = tasks.filter(t => t.status !== 'validated').length;
 
   const navigationItems = [
     {
       id: 'dashboard',
       label: language === 'fr' ? 'Tableau de bord' : 'Dashboard',
       icon: LayoutDashboard,
+      roles: ['owner', 'director', 'accountant', 'hr', 'sales', 'employee'],
+    },
+    {
+      id: 'workspace',
+      label: language === 'fr' ? 'Espace de Travail' : 'Workspace & Tasks',
+      icon: ClipboardList,
+      badge: pendingTasksCount > 0 ? String(pendingTasksCount) : undefined,
       roles: ['owner', 'director', 'accountant', 'hr', 'sales', 'employee'],
     },
     {
