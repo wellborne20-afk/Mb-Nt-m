@@ -12,13 +12,15 @@ import {
   ArrowRightCircle,
   Archive,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Link2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Modal } from '../common/Modal';
 import { TaskListSection } from './TaskListSection';
 import { DailyReportView } from './DailyReportView';
 import { PositionsManager } from './PositionsManager';
+import { TeamAccessManager } from '../settings/TeamAccessManager';
 import { TaskPriority, WorkspaceTask } from '../../types';
 import { formatDateTime } from '../../utils/formatters';
 
@@ -37,10 +39,12 @@ export const WorkspaceModule: React.FC = () => {
     markMessageConvertedToTask,
     archiveWorkspaceMessage,
     employees,
+    hasUserModulePermission,
     language,
   } = useApp();
 
-  const [activeTab, setActiveTab] = useState<'tasks' | 'messages' | 'report' | 'positions'>('tasks');
+  const canManageAccess = hasUserModulePermission('settings');
+  const [activeTab, setActiveTab] = useState<'tasks' | 'messages' | 'report' | 'positions' | 'access'>('tasks');
   const [selectedPositionFilter, setSelectedPositionFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCompleted, setShowCompleted] = useState(true);
@@ -367,6 +371,21 @@ export const WorkspaceModule: React.FC = () => {
             <span>Postes de l’Entreprise</span>
             <span className="font-mono tabular-nums opacity-80">({positions.length})</span>
           </button>
+
+          {canManageAccess && (
+            <button
+              type="button"
+              onClick={() => setActiveTab('access')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                activeTab === 'access'
+                  ? 'bg-slate-900 text-white dark:bg-emerald-600'
+                  : 'text-slate-600 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800'
+              }`}
+            >
+              <Link2 className="w-3.5 h-3.5" />
+              <span>Accès & Liens d’Équipe</span>
+            </button>
+          )}
         </div>
 
         {/* Position / Search Filter (shown on tasks and messages tabs) */}
@@ -836,6 +855,9 @@ export const WorkspaceModule: React.FC = () => {
 
       {/* TAB 4: COMPANY POSITIONS (MANUALLY DEFINED) */}
       {activeTab === 'positions' && <PositionsManager />}
+
+      {/* TAB 5: TEAM ACCESS & PERSONAL LOGIN LINKS (OWNER/MANAGER ONLY) */}
+      {activeTab === 'access' && canManageAccess && <TeamAccessManager />}
 
       {/* MODAL: EDIT EXISTING TASK */}
       <Modal

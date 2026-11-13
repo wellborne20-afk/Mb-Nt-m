@@ -21,6 +21,8 @@ import {
   AuditLog,
   AppNotification,
   ERPModuleId,
+  AppModuleKey,
+  DEFAULT_ROLE_MODULES,
   ModuleSubscription,
   CompanyPosition,
   WorkspaceTask,
@@ -67,7 +69,9 @@ interface AppContextType {
   isAuthenticated: boolean;
   isSuperAdmin: boolean;
   isImpersonating: boolean;
+  isScopedLinkSession: boolean;
   login: (tenantId: string, email: string, role: UserRole) => void;
+  loginWithToken: (tenantId: string, token: string) => boolean;
   loginSuperAdmin: () => void;
   superAdminImpersonate: (tenantId: string) => void;
   superAdminReturnToConsole: () => void;
@@ -92,6 +96,8 @@ interface AppContextType {
   addModuleToTenant: (tenantId: string, moduleId: ERPModuleId, months: number, price?: number) => void;
   isModuleAccessible: (moduleId: ERPModuleId) => boolean;
   isSubscriptionActive: () => boolean;
+  getUserAllowedModules: (user?: User) => AppModuleKey[];
+  hasUserModulePermission: (moduleKey: AppModuleKey) => boolean;
 
   currentTenant: Tenant;
   tenants: Tenant[];
@@ -100,6 +106,11 @@ interface AppContextType {
   currentUser: User;
   switchRole: (role: UserRole) => void;
   users: User[];
+  allUsers: User[];
+  addCompanyUser: (data: Omit<User, 'id' | 'tenantId' | 'accessToken' | 'isActive'>) => User;
+  updateCompanyUser: (id: string, data: Partial<User>) => void;
+  regenerateUserAccessToken: (id: string) => string;
+  toggleCompanyUserActive: (id: string) => void;
 
   // Finances
   accounts: FinancialAccount[];
@@ -201,6 +212,28 @@ try {
   // Ignore in SSR/restricted environments
 }
 
+const pickDefaultModule = (
+  allowed: AppModuleKey[],
+  role: UserRole,
+  tenant: Tenant,
+  allTasks: WorkspaceTask[]
+): string => {
+  const todayStr = new Date().toISOString().split('T')[0];
+  const hasRemainingPriorityTasks = allTasks.some(
+    t =>
+      !t.isArchived &&
+      t.tenantId === tenant.id &&
+      t.status !== 'validated' &&
+      (t.createdDate < todayStr || t.dueDate < todayStr || t.status === 'correction_needed')
+  );
+
+  if ((role === 'employee' || !allowed.includes('dashboard') || hasRemainingPriorityTasks) && allowed.includes('workspace')) {
+    return 'workspace';
+  }
+  if (allowed.includes('dashboard')) return 'dashboard';
+  return allowed[0] || 'workspace';
+};
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Load state or default to initial mock data
   const loadStored = <T,>(key: string, fallback: T): T => {
@@ -215,7 +248,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => loadStored('isAuthenticated', false));
   const [isSuperAdminSession, setIsSuperAdminSession] = useState<boolean>(() => loadStored('isSuperAdminSession', false));
   const [isImpersonating, setIsImpersonating] = useState<boolean>(() => loadStored('isImpersonating', false));
-  const [activeModule, setActiveModule] = useState<string>('dashboard');
+  const [isScopedLinkSession, setIsScopedLinkSession] = useState<boolean>(() => loadStored('isScopedLinkSession', false));
+  const [activeUserId, setActiveUserId] = useState<string | null>(() => loadStored('activeUserId', null));
+  const [activeModule, setActiveModule] = useState<string>(() => loadStored('activeModule', 'dashboard'));
   const [currency, setCurrency] = useState<Currency>(() => loadStored('currency', 'XAF'));
   const [language, setLanguage] = useState<Language>(() => loadStored('language', 'fr'));
   const [darkMode, setDarkMode] = useState<boolean>(() => loadStored('darkMode', false));
@@ -223,7 +258,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [tenants, setTenants] = useState<Tenant[]>(() => loadStored('tenants', initialTenants));
   const [currentTenantId, setCurrentTenantId] = useState<string>(() => loadStored('currentTenantId', 'tenant-kemet-dla'));
 
-  const [users, setUsers] = useState<User[]>(() => loadStored('users', initialUsers));
+  const [users, setUsers] = useState<User[]>(() => {
+    const loaded = loadStored<User[]>('users', initialUsers);
+    return loaded.map((u, idx) => ({
+      ...u,
+      accessToken: u.accessToken || `tk-${u.id.replace(/[^a-zA-Z0-9]/g, '').slice(-6)}-${idx + 10}`,
+      allowedModules: u.allowedModules && u.allowedModules.length > 0
+        ? u.allowedModules
+        : DEFAULT_ROLE_MODULES[u.role] || ['workspace'],
+    }));
+  });
   const [currentRole, setCurrentRole] = useState<UserRole>(() => loadStored('currentRole', 'owner'));
 
   const [accounts, setAccounts] = useState<FinancialAccount[]>(() => loadStored('accounts', initialAccounts));
@@ -250,7 +294,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [workspaceMessages, setWorkspaceMessages] = useState<WorkspaceMessage[]>(() => loadStored('workspaceMessages', initialWorkspaceMessages));
   const [dailyReports, setDailyReports] = useState<DailyWorkReport[]>(() => loadStored('dailyReports', initialDailyReports));
 
-  // Ensure existing stored tenants gracefully get the 'workspace' module entry if missing
+  // Ensure existing stored tenants gracefully get 'workspace' module, backfill user tokens/modules, and support URL direct access links (?tenant=...&token=...)
   useEffect(() => {
     setTenants(prev => {
       let changed = false;
@@ -276,6 +320,54 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       });
       return changed ? updated : prev;
     });
+
+    setUsers(prev => {
+      let changed = false;
+      const normalized = prev.map((u, idx) => {
+        const needsToken = !u.accessToken;
+        const needsModules = !u.allowedModules || u.allowedModules.length === 0;
+        if (!needsToken && !needsModules) return u;
+        changed = true;
+        return {
+          ...u,
+          accessToken: u.accessToken || `tk-${u.id.replace(/[^a-zA-Z0-9]/g, '').slice(-6)}-${idx + 10}`,
+          allowedModules: u.allowedModules && u.allowedModules.length > 0
+            ? u.allowedModules
+            : DEFAULT_ROLE_MODULES[u.role] || ['workspace'],
+        };
+      });
+      return changed ? normalized : prev;
+    });
+
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlToken = params.get('token') || params.get('access');
+      const urlTenant = params.get('tenant');
+      if (urlToken) {
+        const matched = users.find(
+          u => u.isActive && u.accessToken === urlToken && (!urlTenant || u.tenantId === urlTenant)
+        );
+        if (matched) {
+          const targetTenant = tenants.find(t => t.id === matched.tenantId) || tenants[0];
+          const allowed = matched.allowedModules && matched.allowedModules.length > 0
+            ? matched.allowedModules
+            : DEFAULT_ROLE_MODULES[matched.role] || ['workspace'];
+          const preferred = pickDefaultModule(allowed, matched.role, targetTenant, tasks);
+          setCurrentTenantId(matched.tenantId);
+          setCurrentRole(matched.role);
+          setActiveUserId(matched.id);
+          setIsScopedLinkSession(true);
+          setIsSuperAdminSession(false);
+          setIsImpersonating(false);
+          setIsAuthenticated(true);
+          setActiveModule(preferred);
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      }
+    } catch {
+      // Ignore invalid URL environments
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Sync to localStorage
@@ -287,6 +379,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.setItem(STORAGE_PREFIX + 'currentTenantId', JSON.stringify(currentTenantId));
     localStorage.setItem(STORAGE_PREFIX + 'users', JSON.stringify(users));
     localStorage.setItem(STORAGE_PREFIX + 'currentRole', JSON.stringify(currentRole));
+    localStorage.setItem(STORAGE_PREFIX + 'activeUserId', JSON.stringify(activeUserId));
+    localStorage.setItem(STORAGE_PREFIX + 'isScopedLinkSession', JSON.stringify(isScopedLinkSession));
+    localStorage.setItem(STORAGE_PREFIX + 'isSuperAdminSession', JSON.stringify(isSuperAdminSession));
+    localStorage.setItem(STORAGE_PREFIX + 'isImpersonating', JSON.stringify(isImpersonating));
+    localStorage.setItem(STORAGE_PREFIX + 'activeModule', JSON.stringify(activeModule));
     localStorage.setItem(STORAGE_PREFIX + 'accounts', JSON.stringify(accounts));
     localStorage.setItem(STORAGE_PREFIX + 'transactions', JSON.stringify(transactions));
     localStorage.setItem(STORAGE_PREFIX + 'dailyClosings', JSON.stringify(dailyClosings));
@@ -313,7 +410,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       document.documentElement.classList.remove('dark');
     }
   }, [
-    isAuthenticated,
+    isAuthenticated, isSuperAdminSession, isImpersonating, isScopedLinkSession, activeUserId, activeModule,
     currency, language, darkMode, tenants, currentTenantId, users, currentRole,
     accounts, transactions, dailyClosings, budgets, invoices, employees, leaves,
     payrolls, assets, assetAssignments, customers, crmDeals, auditLogs, notifications,
@@ -321,14 +418,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   ]);
 
   const currentTenant = tenants.find(t => t.id === currentTenantId) || tenants[0];
+  const matchedActiveUser = activeUserId
+    ? users.find(u => u.id === activeUserId && u.tenantId === currentTenant.id && u.isActive)
+    : undefined;
+
   const currentUser: User = (isSuperAdminSession && !isImpersonating) ? {
     id: 'user-superadmin',
     tenantId: 'platform-master',
     name: 'Super Administrateur Mbǎ\'Ntām',
     email: 'superadmin@mbantam.cm',
     role: 'superadmin',
+    allowedModules: DEFAULT_ROLE_MODULES.superadmin,
     isActive: true,
-  } : {
+  } : matchedActiveUser ? matchedActiveUser : {
     id: 'user-active',
     tenantId: currentTenant.id,
     name: currentRole === 'owner' ? 'Alexandre Mbida (Directeur)' :
@@ -338,34 +440,90 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           'Jean-Paul Tchinda (Employé)',
     email: 'user@kemet-tech.cm',
     role: currentRole,
+    allowedModules: DEFAULT_ROLE_MODULES[currentRole] || ['workspace'],
     isActive: true,
+  };
+
+  const getUserAllowedModules = (user?: User): AppModuleKey[] => {
+    const target = user || currentUser;
+    if (target.role === 'superadmin') return DEFAULT_ROLE_MODULES.superadmin;
+    if (target.allowedModules && target.allowedModules.length > 0) {
+      return target.allowedModules;
+    }
+    return DEFAULT_ROLE_MODULES[target.role] || ['workspace'];
+  };
+
+  const hasUserModulePermission = (moduleKey: AppModuleKey): boolean => {
+    if (isSuperAdminSession && !isImpersonating) return true;
+    return getUserAllowedModules(currentUser).includes(moduleKey);
   };
 
   const toggleDarkMode = () => setDarkMode(prev => !prev);
 
   const login = (tenantId: string, email: string, role: UserRole) => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const hasRemainingPriorityTasks = tasks.some(
-      t =>
-        !t.isArchived &&
-        t.tenantId === tenantId &&
-        t.status !== 'validated' &&
-        (t.createdDate < todayStr || t.dueDate < todayStr || t.status === 'correction_needed')
+    const targetTenant = tenants.find(t => t.id === tenantId) || tenants[0];
+    const matchedUser = users.find(
+      u => u.tenantId === tenantId && u.isActive && u.email.toLowerCase() === email.trim().toLowerCase()
     );
 
+    const effectiveRole = matchedUser ? matchedUser.role : role;
+    const allowed = matchedUser?.allowedModules && matchedUser.allowedModules.length > 0
+      ? matchedUser.allowedModules
+      : DEFAULT_ROLE_MODULES[effectiveRole] || ['workspace'];
+
     setCurrentTenantId(tenantId);
-    setCurrentRole(role);
+    setCurrentRole(effectiveRole);
+    setActiveUserId(matchedUser ? matchedUser.id : null);
+    setIsScopedLinkSession(effectiveRole !== 'owner' && effectiveRole !== 'director');
     setIsSuperAdminSession(false);
     setIsImpersonating(false);
     setIsAuthenticated(true);
-    setActiveModule(role === 'employee' || hasRemainingPriorityTasks ? 'workspace' : 'dashboard');
-    addAuditLog('Connexion réussie', 'Authentification', `Connexion de ${email} (Rôle: ${role})`);
+    setActiveModule(pickDefaultModule(allowed, effectiveRole, targetTenant, tasks));
+
+    if (matchedUser) {
+      setUsers(prev => prev.map(u => u.id === matchedUser.id ? { ...u, lastLogin: new Date().toISOString() } : u));
+    }
+    addAuditLog('Connexion réussie', 'Authentification', `Connexion de ${matchedUser ? matchedUser.name : email} (Rôle: ${effectiveRole})`);
+  };
+
+  const loginWithToken = (tenantId: string, token: string): boolean => {
+    const cleanToken = token.trim();
+    if (!cleanToken) return false;
+
+    const matchedUser = users.find(
+      u => u.isActive && u.accessToken === cleanToken && (!tenantId || u.tenantId === tenantId)
+    );
+    if (!matchedUser) return false;
+
+    const targetTenant = tenants.find(t => t.id === matchedUser.tenantId) || tenants[0];
+    const allowed = matchedUser.allowedModules && matchedUser.allowedModules.length > 0
+      ? matchedUser.allowedModules
+      : DEFAULT_ROLE_MODULES[matchedUser.role] || ['workspace'];
+
+    setCurrentTenantId(matchedUser.tenantId);
+    setCurrentRole(matchedUser.role);
+    setActiveUserId(matchedUser.id);
+    setIsScopedLinkSession(true);
+    setIsSuperAdminSession(false);
+    setIsImpersonating(false);
+    setIsAuthenticated(true);
+    setActiveModule(pickDefaultModule(allowed, matchedUser.role, targetTenant, tasks));
+
+    setUsers(prev => prev.map(u => u.id === matchedUser.id ? { ...u, lastLogin: new Date().toISOString() } : u));
+    addAuditLog(
+      'Connexion par lien personnel',
+      'Authentification',
+      `Accès direct de ${matchedUser.name} (${matchedUser.positionTitle || matchedUser.role}) à ses modules autorisés`
+    );
+    return true;
   };
 
   const loginSuperAdmin = () => {
     setIsAuthenticated(true);
     setIsSuperAdminSession(true);
     setIsImpersonating(false);
+    setIsScopedLinkSession(false);
+    setActiveUserId(null);
     setCurrentRole('superadmin');
     setActiveModule('superadmin_console');
     addAuditLog('Connexion Super Administrateur', 'Sécurité Plateforme', 'Accès direct à la console centrale SaaS');
@@ -374,6 +532,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const superAdminImpersonate = (tenantId: string) => {
     setCurrentTenantId(tenantId);
     setIsImpersonating(true);
+    setIsScopedLinkSession(false);
+    setActiveUserId(null);
     setCurrentRole('owner');
     setActiveModule('dashboard');
     addAuditLog('Prise en main entreprise (Impersonation)', 'Support Super Admin', `Accès à l'environnement client ${tenantId}`);
@@ -381,6 +541,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const superAdminReturnToConsole = () => {
     setIsImpersonating(false);
+    setIsScopedLinkSession(false);
+    setActiveUserId(null);
     setCurrentRole('superadmin');
     setActiveModule('superadmin_console');
     addAuditLog('Retour console centrale', 'Support Super Admin', 'Fermeture de l\'environnement client');
@@ -390,6 +552,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setIsAuthenticated(false);
     setIsSuperAdminSession(false);
     setIsImpersonating(false);
+    setIsScopedLinkSession(false);
+    setActiveUserId(null);
     addAuditLog('Déconnexion manuelle', 'Authentification', 'Déconnexion utilisateur');
   };
 
@@ -530,6 +694,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       createdAt: new Date().toISOString().split('T')[0],
     };
 
+    const tokenSuffix = Math.random().toString(36).slice(2, 8);
     const newAdminUser: User = {
       id: `user-${Date.now()}`,
       tenantId: newTenantId,
@@ -538,6 +703,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       phone: adminUser.phone,
       role: 'owner',
       department: 'Direction Générale',
+      positionTitle: 'Directeur Général',
+      allowedModules: DEFAULT_ROLE_MODULES.owner,
+      accessToken: `dg-${tokenSuffix}`,
       isActive: true,
       lastLogin: new Date().toISOString(),
     };
@@ -597,6 +765,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       id: newTenantId,
     };
 
+    const tokenSuffix = Math.random().toString(36).slice(2, 8);
     const newAdminUser: User = {
       id: `user-${Date.now()}`,
       tenantId: newTenantId,
@@ -605,6 +774,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       phone: adminUser.phone,
       role: 'owner',
       department: 'Direction Générale',
+      positionTitle: 'Directeur Général',
+      allowedModules: DEFAULT_ROLE_MODULES.owner,
+      accessToken: `dg-${tokenSuffix}`,
       isActive: true,
       lastLogin: new Date().toISOString(),
     };
@@ -631,6 +803,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const switchTenant = (tenantId: string) => {
     setCurrentTenantId(tenantId);
+    setActiveUserId(null);
     addAuditLog('Changement d’entreprise active', 'Multi-tenant', `Bascule vers ${tenantId}`);
   };
 
@@ -640,8 +813,53 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const switchRole = (role: UserRole) => {
+    setActiveUserId(null);
     setCurrentRole(role);
+    const allowed = DEFAULT_ROLE_MODULES[role] || ['workspace'];
+    if (!allowed.includes(activeModule as AppModuleKey)) {
+      setActiveModule(pickDefaultModule(allowed, role, currentTenant, tasks));
+    }
     addAuditLog(`Changement de rôle vers ${role}`, 'Sécurité', 'Basculement de simulation de permissions');
+  };
+
+  const addCompanyUser = (data: Omit<User, 'id' | 'tenantId' | 'accessToken' | 'isActive'>): User => {
+    const token = `mb-${Math.random().toString(36).slice(2, 7)}-${Date.now().toString(36).slice(-4)}`;
+    const allowed = data.allowedModules && data.allowedModules.length > 0
+      ? data.allowedModules
+      : DEFAULT_ROLE_MODULES[data.role] || ['workspace'];
+
+    const newUser: User = {
+      ...data,
+      id: `user-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      tenantId: currentTenant.id,
+      allowedModules: allowed,
+      accessToken: token,
+      isActive: true,
+    };
+    setUsers(prev => [newUser, ...prev]);
+    addAuditLog(
+      'Création accès collaborateur',
+      'Sécurité & Accès',
+      `${newUser.name} (${newUser.positionTitle || newUser.role}) — Modules: ${allowed.join(', ')}`
+    );
+    return newUser;
+  };
+
+  const updateCompanyUser = (id: string, data: Partial<User>) => {
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...data } : u));
+    addAuditLog('Modification droits collaborateur', 'Sécurité & Accès', `Mise à jour des responsabilités et modules utilisateur #${id}`);
+  };
+
+  const regenerateUserAccessToken = (id: string): string => {
+    const newToken = `mb-${Math.random().toString(36).slice(2, 7)}-${Date.now().toString(36).slice(-4)}`;
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, accessToken: newToken } : u));
+    addAuditLog('Renouvellement lien d’accès', 'Sécurité & Accès', `Nouveau lien généré pour l'utilisateur #${id}`);
+    return newToken;
+  };
+
+  const toggleCompanyUserActive = (id: string) => {
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, isActive: !u.isActive } : u));
+    addAuditLog('Changement statut accès utilisateur', 'Sécurité & Accès', `Activation / désactivation utilisateur #${id}`);
   };
 
   const addAuditLog = (action: string, module: string, details: string) => {
@@ -1273,6 +1491,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       app: "Mbǎ'Ntām ERP",
       version: "1.0.0",
       tenants,
+      users,
       accounts,
       transactions,
       dailyClosings,
@@ -1302,6 +1521,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         throw new Error('Format de fichier de sauvegarde invalide');
       }
       if (data.tenants) setTenants(data.tenants);
+      if (data.users) setUsers(data.users);
       if (data.accounts) setAccounts(data.accounts);
       if (data.transactions) setTransactions(data.transactions);
       if (data.dailyClosings) setDailyClosings(data.dailyClosings);
@@ -1389,7 +1609,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         isAuthenticated,
         isSuperAdmin: isSuperAdminSession,
         isImpersonating,
+        isScopedLinkSession,
         login,
+        loginWithToken,
         loginSuperAdmin,
         superAdminImpersonate,
         superAdminReturnToConsole,
@@ -1404,6 +1626,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addModuleToTenant,
         isModuleAccessible,
         isSubscriptionActive,
+        getUserAllowedModules,
+        hasUserModulePermission,
         activeModule,
         setActiveModule,
         currency,
@@ -1418,8 +1642,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         updateTenantProfile,
         currentUser,
         switchRole,
-        users,
-        accounts,
+        users: users.filter(u => u.tenantId === currentTenant.id),
+        allUsers: users,
+        addCompanyUser,
+        updateCompanyUser,
+        regenerateUserAccessToken,
+        toggleCompanyUserActive,
+        accounts: accounts.filter(a => a.tenantId === currentTenant.id),
         transactions: transactions.filter(t => !t.isArchived && t.tenantId === currentTenant.id),
         dailyClosings: dailyClosings.filter(c => c.tenantId === currentTenant.id),
         budgets: budgets.filter(b => b.tenantId === currentTenant.id),

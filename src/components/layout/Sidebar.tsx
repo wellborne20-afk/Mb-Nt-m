@@ -21,7 +21,7 @@ import {
   ClipboardList
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { ERPModuleId } from '../../types';
+import { AppModuleKey, ERPModuleId } from '../../types';
 import { formatDate } from '../../utils/formatters';
 
 interface SidebarProps {
@@ -37,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
     currentTenant,
     currentUser,
     isModuleAccessible,
+    hasUserModulePermission,
     isSuperAdmin,
     isImpersonating,
     superAdminReturnToConsole,
@@ -172,8 +173,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             {language === 'fr' ? 'Modules Métiers' : 'Business Modules'}
           </div>
 
-          {navigationItems.map(item => {
-            const hasRolePermission = item.roles.includes(currentUser.role) || currentUser.role === 'superadmin';
+          {navigationItems
+            .filter(item => hasUserModulePermission(item.id as AppModuleKey))
+            .map(item => {
             const isSubscribedAndActive = (item.id === 'dashboard' || item.id === 'audit' || item.id === 'settings')
               ? true
               : isModuleAccessible(item.id as ERPModuleId);
@@ -184,20 +186,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
               <button
                 key={item.id}
                 onClick={() => {
-                  if (hasRolePermission) {
-                    setActiveModule(item.id);
-                    onClose();
-                  }
+                  setActiveModule(item.id);
+                  onClose();
                 }}
-                disabled={!hasRolePermission}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all group ${
+                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all group cursor-pointer ${
                   isActive
                     ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
                     : !isSubscribedAndActive
                     ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 opacity-75'
-                    : hasRolePermission
-                    ? 'text-slate-300 hover:text-white hover:bg-slate-800/80'
-                    : 'text-slate-600 cursor-not-allowed opacity-50'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800/80'
                 }`}
               >
                 <div className="flex items-center gap-3">
@@ -219,11 +216,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   {isSubscribedAndActive && item.badge && (
                     <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded font-bold">
                       {item.badge}
-                    </span>
-                  )}
-                  {!hasRolePermission && (
-                    <span className="text-[9px] text-slate-600 uppercase font-mono">
-                      Verrouillé
                     </span>
                   )}
                 </div>

@@ -14,7 +14,8 @@ import {
   Moon,
   Zap,
   Crown,
-  AlertCircle
+  AlertCircle,
+  Link2
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { UserRole } from '../../types';
@@ -23,6 +24,7 @@ export const AuthModule: React.FC = () => {
   const {
     tenants,
     login,
+    loginWithToken,
     loginSuperAdmin,
     language,
     setLanguage,
@@ -38,6 +40,8 @@ export const AuthModule: React.FC = () => {
   const [loginEmail, setLoginEmail] = useState('alexandre.mbida@kemet-tech.cm');
   const [loginPassword, setLoginPassword] = useState('••••••••••');
   const [loginRole, setLoginRole] = useState<UserRole>('owner');
+  const [accessTokenInput, setAccessTokenInput] = useState('');
+  const [showTokenBox, setShowTokenBox] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
   // Super Admin login state
@@ -52,6 +56,32 @@ export const AuthModule: React.FC = () => {
     }
     setLoginError(null);
     login(selectedTenantId, loginEmail, loginRole);
+  };
+
+  const handleTokenLogin = () => {
+    const raw = accessTokenInput.trim();
+    if (!raw) {
+      setLoginError('Veuillez coller votre lien ou code d’accès personnel.');
+      return;
+    }
+    let extractedTenant = '';
+    let extractedToken = raw;
+    try {
+      if (raw.includes('http') || raw.includes('?')) {
+        const urlObj = new URL(raw.startsWith('http') ? raw : `${window.location.origin}/${raw.replace(/^\//, '')}`);
+        extractedToken = urlObj.searchParams.get('token') || urlObj.searchParams.get('access') || raw;
+        extractedTenant = urlObj.searchParams.get('tenant') || '';
+      }
+    } catch {
+      extractedToken = raw;
+    }
+
+    const ok = loginWithToken(extractedTenant, extractedToken);
+    if (!ok) {
+      setLoginError('Lien ou code d’accès personnel invalide ou désactivé.');
+    } else {
+      setLoginError(null);
+    }
   };
 
   const handleSuperAdminSubmit = (e: React.FormEvent) => {
@@ -246,6 +276,42 @@ export const AuthModule: React.FC = () => {
                 <ArrowRight className="w-4 h-4" />
               </button>
 
+              {/* Quick Personal Access Link / Code Box */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowTokenBox(!showTokenBox)}
+                  className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Link2 className="w-3.5 h-3.5" />
+                  <span>{showTokenBox ? 'Masquer l’accès par lien / code' : 'Vous avez reçu un lien ou code d’accès personnel ?'}</span>
+                </button>
+
+                {showTokenBox && (
+                  <div className="mt-2 p-3 rounded-xl bg-slate-900/90 border border-slate-700 space-y-2">
+                    <div className="text-[11px] text-slate-300">
+                      Collez le lien ou le code reçu de votre responsable pour ouvrir directement votre espace dédié :
+                    </div>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={accessTokenInput}
+                        onChange={e => setAccessTokenInput(e.target.value)}
+                        placeholder="Ex : kemet-travail-05 ou lien complet..."
+                        className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-xl text-xs text-white focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleTokenLogin}
+                        className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer whitespace-nowrap"
+                      >
+                        Ouvrir
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Quick Demo Access Box for rapid evaluation */}
               <div className="pt-4 border-t border-slate-700/60 space-y-2">
                 <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -259,8 +325,17 @@ export const AuthModule: React.FC = () => {
                     onClick={() => login('tenant-kemet-dla', 'alexandre.mbida@kemet-tech.cm', 'owner')}
                     className="p-2 rounded-xl bg-slate-900 border border-slate-700 hover:border-emerald-500 text-left transition-colors cursor-pointer"
                   >
-                    <div className="font-bold text-white truncate">Kemet (Douala)</div>
-                    <div className="text-[10px] text-emerald-400">👑 Tous les modules</div>
+                    <div className="font-bold text-white truncate">Kemet (Directeur)</div>
+                    <div className="text-[10px] text-emerald-400">Tous les modules</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => login('tenant-kemet-dla', 'jp.tchinda@kemet-tech.cm', 'employee')}
+                    className="p-2 rounded-xl bg-slate-900 border border-slate-700 hover:border-emerald-500 text-left transition-colors cursor-pointer"
+                  >
+                    <div className="font-bold text-white truncate">Travailleur (Kemet)</div>
+                    <div className="text-[10px] text-teal-400">Espace Travail seul</div>
                   </button>
 
                   <button
@@ -269,16 +344,7 @@ export const AuthModule: React.FC = () => {
                     className="p-2 rounded-xl bg-slate-900 border border-slate-700 hover:border-emerald-500 text-left transition-colors cursor-pointer"
                   >
                     <div className="font-bold text-white truncate">Étoile (Yaoundé)</div>
-                    <div className="text-[10px] text-indigo-400">💼 Caisse + Factures</div>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => login('tenant-bassa-exp', 'contact@boulangerie-bassa.cm', 'owner')}
-                    className="p-2 rounded-xl bg-slate-900 border border-slate-700 hover:border-rose-500 text-left transition-colors cursor-pointer"
-                  >
-                    <div className="font-bold text-white truncate">Boulangerie Bassa</div>
-                    <div className="text-[10px] text-rose-400">⛔ Test Expire / Coupé</div>
+                    <div className="text-[10px] text-indigo-400">Caisse + Factures</div>
                   </button>
 
                   <button
@@ -286,8 +352,8 @@ export const AuthModule: React.FC = () => {
                     onClick={() => login('tenant-kemet-dla', 'b.ngo@kemet-tech.cm', 'accountant')}
                     className="p-2 rounded-xl bg-slate-900 border border-slate-700 hover:border-emerald-500 text-left transition-colors cursor-pointer"
                   >
-                    <div className="font-bold text-white truncate">Kemet (Douala)</div>
-                    <div className="text-[10px] text-blue-400">📊 Chef Comptable</div>
+                    <div className="font-bold text-white truncate">Comptable (Kemet)</div>
+                    <div className="text-[10px] text-blue-400">Finances & Factures</div>
                   </button>
                 </div>
               </div>

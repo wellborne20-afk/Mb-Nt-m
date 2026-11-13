@@ -28,6 +28,7 @@ export const HumanResourcesModule: React.FC = () => {
   const {
     employees,
     leaves,
+    positions,
     addEmployee,
     archiveEmployee,
     addLeaveRequest,
@@ -132,7 +133,8 @@ export const HumanResourcesModule: React.FC = () => {
 
   const handleCreateLeave = (e: React.FormEvent) => {
     e.preventDefault();
-    const emp = employees.find(e => e.id === leaveEmpId) || employees[0];
+    const emp = employees.find(item => item.id === leaveEmpId) || employees[0];
+    if (!emp) return;
     addLeaveRequest({
       employeeId: emp.id,
       employeeName: `${emp.firstName} ${emp.lastName}`,
@@ -271,7 +273,7 @@ export const HumanResourcesModule: React.FC = () => {
               <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
               <h4 className="font-bold text-slate-700 dark:text-slate-200 text-sm">Aucun collaborateur enregistré</h4>
               <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                Votre entreprise démarre à zéro. Cliquez sur « Nouveau Collaborateur » en haut à droite pour ajouter vos employés.
+                Votre entreprise démarre à zéro. Cliquez sur « Nouvel Employé » en haut à droite pour ajouter vos collaborateurs.
               </p>
             </div>
           ) : (
@@ -517,12 +519,18 @@ export const HumanResourcesModule: React.FC = () => {
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Intitulé du Poste *</label>
               <input
                 type="text"
+                list="hr-positions-list"
                 placeholder="Ex: Comptable, Développeur..."
                 value={formPosition}
                 onChange={e => setFormPosition(e.target.value)}
                 className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs"
                 required
               />
+              <datalist id="hr-positions-list">
+                {positions.map(p => (
+                  <option key={p.id} value={p.title} />
+                ))}
+              </datalist>
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Département</label>
@@ -646,17 +654,23 @@ export const HumanResourcesModule: React.FC = () => {
         <form onSubmit={handleCreateLeave} className="space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Employé demandeur *</label>
-            <select
-              value={leaveEmpId}
-              onChange={e => setLeaveEmpId(e.target.value)}
-              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs"
-            >
-              {employees.map(e => (
-                <option key={e.id} value={e.id}>
-                  {e.firstName} {e.lastName} ({e.position})
-                </option>
-              ))}
-            </select>
+            {employees.length === 0 ? (
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-700 dark:text-amber-300">
+                Aucun employé enregistré. Ajoutez d’abord un employé avant de déposer une demande de congé.
+              </div>
+            ) : (
+              <select
+                value={leaveEmpId || employees[0]?.id || ''}
+                onChange={e => setLeaveEmpId(e.target.value)}
+                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs"
+              >
+                {employees.map(e => (
+                  <option key={e.id} value={e.id}>
+                    {e.firstName} {e.lastName} ({e.position})
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
           <div>
@@ -729,7 +743,8 @@ export const HumanResourcesModule: React.FC = () => {
             </button>
             <button
               type="submit"
-              className="px-5 py-2 bg-emerald-600 text-white rounded-xl text-xs font-bold"
+              disabled={employees.length === 0}
+              className="px-5 py-2 bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl text-xs font-bold"
             >
               Soumettre la demande
             </button>
@@ -744,98 +759,183 @@ export const HumanResourcesModule: React.FC = () => {
         title="Générateur de Documents RH Officiels"
         maxWidth="3xl"
       >
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Document à générer *</label>
-              <select
-                value={docType}
-                onChange={e => setDocType(e.target.value as any)}
-                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold"
-              >
-                <option value="attestation">Attestation de Travail</option>
-                <option value="contract">Contrat de Travail Conforme OHADA</option>
-                <option value="certificate">Certificat de Travail de Fin de Contrat</option>
-                <option value="warning">Lettre d'Avertissement / Notification</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Employé concerné *</label>
-              <select
-                value={docEmpId}
-                onChange={e => setDocEmpId(e.target.value)}
-                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs"
-              >
-                {employees.map(e => (
-                  <option key={e.id} value={e.id}>
-                    {e.firstName} {e.lastName} ({e.matricule} - {e.position})
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Printable Letter Sheet */}
-          <div className="p-8 border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white space-y-6 text-xs leading-relaxed font-serif">
-            <div className="flex justify-between items-start border-b border-slate-100 pb-4">
-              <div>
-                <div className="font-sans font-bold text-base text-slate-900 dark:text-white">{currentTenant.name}</div>
-                <div className="text-[10px] text-slate-500 font-sans">{currentTenant.address}, {currentTenant.city} • NIU: {currentTenant.taxId}</div>
+        {!selectedDocEmployee ? (
+          <div className="py-10 text-center space-y-4">
+            <FileText className="w-10 h-10 text-slate-300 mx-auto" />
+            <div className="space-y-1">
+              <div className="text-sm font-bold text-slate-800 dark:text-slate-100">
+                Aucun employé disponible pour générer un document
               </div>
-              <div className="text-right font-sans text-xs text-slate-400">
-                Fait à {currentTenant.city}, le {formatDate(new Date().toISOString(), language)}
-              </div>
-            </div>
-
-            <div className="text-center py-4">
-              <h2 className="text-base font-bold uppercase tracking-wider underline">
-                {docType === 'attestation' ? 'ATTESTATION DE TRAVAIL' :
-                 docType === 'contract' ? 'CONTRAT INDIVIDUEL DE TRAVAIL' :
-                 docType === 'certificate' ? 'CERTIFICAT DE TRAVAIL' : 'LETTRE D’AVERTISSEMENT'}
-              </h2>
-            </div>
-
-            <div className="space-y-4 text-justify">
-              <p>
-                Nous soussignés, la société <strong>{currentTenant.name}</strong>, représentée par sa Direction Générale, certifions par la présente que :
-              </p>
-              <p className="pl-6 border-l-2 border-emerald-500 font-sans">
-                <strong>Nom et Prénom :</strong> {selectedDocEmployee.firstName} {selectedDocEmployee.lastName}<br />
-                <strong>Matricule :</strong> {selectedDocEmployee.matricule}<br />
-                <strong>N° CNI :</strong> {selectedDocEmployee.nationalId}<br />
-                <strong>N° Immatriculation CNPS :</strong> {selectedDocEmployee.cnpsNumber}<br />
-                <strong>Poste occupé :</strong> {selectedDocEmployee.position} ({selectedDocEmployee.department})<br />
-                <strong>Date d'embauche :</strong> {formatDate(selectedDocEmployee.hireDate, language)}
-              </p>
-              <p>
-                L'intéressé(e) est lié(e) à notre entreprise par un contrat de type <strong>{selectedDocEmployee.contractType}</strong> et exerce ses fonctions en toute probité et régularité juridique.
-              </p>
-              <p>
-                Cette attestation lui est délivrée pour servir et valoir ce que de droit.
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                Veuillez d’abord enregistrer un employé dans l’annuaire du personnel afin de générer une attestation de travail, un contrat OHADA ou un certificat.
               </p>
             </div>
-
-            <div className="pt-8 flex justify-between items-end font-sans">
-              <div className="text-xs text-slate-400">
-                Visa de l'Inspection du Travail (le cas échéant)
-              </div>
-              <div className="text-center p-3 border border-slate-200 rounded-xl w-48">
-                <div className="text-[10px] text-slate-400 uppercase font-bold">Pour la Direction Générale</div>
-                <div className="italic text-emerald-700 font-bold mt-3">Cachet & Signature</div>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2">
             <button
-              onClick={triggerPrint}
-              className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 dark:bg-emerald-600 text-white rounded-xl text-xs font-bold"
+              type="button"
+              onClick={() => {
+                setIsDocModalOpen(false);
+                setIsNewEmpModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold cursor-pointer"
             >
-              <Printer className="w-4 h-4" />
-              <span>Imprimer l'attestation</span>
+              <UserPlus className="w-4 h-4" />
+              <span>Nouvel Employé</span>
             </button>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Document à générer *</label>
+                <select
+                  value={docType}
+                  onChange={e => setDocType(e.target.value as any)}
+                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold"
+                >
+                  <option value="attestation">Attestation de Travail</option>
+                  <option value="contract">Contrat de Travail Conforme OHADA</option>
+                  <option value="certificate">Certificat de Travail de Fin de Contrat</option>
+                  <option value="warning">Lettre d'Avertissement / Notification</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Employé concerné *</label>
+                <select
+                  value={selectedDocEmployee.id}
+                  onChange={e => setDocEmpId(e.target.value)}
+                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs"
+                >
+                  {employees.map(e => (
+                    <option key={e.id} value={e.id}>
+                      {e.firstName} {e.lastName} ({e.matricule} - {e.position})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Printable Letter Sheet */}
+            <div className="p-8 border border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 text-slate-900 dark:text-white space-y-6 text-xs leading-relaxed font-serif">
+              <div className="flex justify-between items-start border-b border-slate-100 pb-4">
+                <div>
+                  <div className="font-sans font-bold text-base text-slate-900 dark:text-white">{currentTenant.name}</div>
+                  <div className="text-[10px] text-slate-500 font-sans">{currentTenant.address}, {currentTenant.city} • NIU: {currentTenant.taxId}</div>
+                </div>
+                <div className="text-right font-sans text-xs text-slate-400">
+                  Fait à {currentTenant.city}, le {formatDate(new Date().toISOString(), language)}
+                </div>
+              </div>
+
+              <div className="text-center py-4">
+                <h2 className="text-base font-bold uppercase tracking-wider underline">
+                  {docType === 'attestation' ? 'ATTESTATION DE TRAVAIL' :
+                   docType === 'contract' ? 'CONTRAT INDIVIDUEL DE TRAVAIL' :
+                   docType === 'certificate' ? 'CERTIFICAT DE TRAVAIL' : 'LETTRE D’AVERTISSEMENT'}
+                </h2>
+              </div>
+
+              <div className="space-y-4 text-justify">
+                <p>
+                  Nous soussignés, la société <strong>{currentTenant.name}</strong>, représentée par sa Direction Générale, certifions par la présente que :
+                </p>
+                <p className="pl-6 border-l-2 border-emerald-500 font-sans">
+                  <strong>Nom et Prénom :</strong> {selectedDocEmployee.firstName} {selectedDocEmployee.lastName}<br />
+                  <strong>Matricule :</strong> {selectedDocEmployee.matricule}<br />
+                  <strong>N° CNI :</strong> {selectedDocEmployee.nationalId}<br />
+                  <strong>N° Immatriculation CNPS :</strong> {selectedDocEmployee.cnpsNumber}<br />
+                  <strong>Poste occupé :</strong> {selectedDocEmployee.position} ({selectedDocEmployee.department})<br />
+                  <strong>Date d'embauche :</strong> {formatDate(selectedDocEmployee.hireDate, language)}
+                </p>
+                <p>
+                  L'intéressé(e) est lié(e) à notre entreprise par un contrat de type <strong>{selectedDocEmployee.contractType}</strong> et exerce ses fonctions en toute probité et régularité juridique.
+                </p>
+                <p>
+                  Cette attestation lui est délivrée pour servir et valoir ce que de droit.
+                </p>
+              </div>
+
+              <div className="pt-8 flex justify-between items-end font-sans">
+                <div className="text-xs text-slate-400">
+                  Visa de l'Inspection du Travail (le cas échéant)
+                </div>
+                <div className="text-center p-3 border border-slate-200 rounded-xl w-48">
+                  <div className="text-[10px] text-slate-400 uppercase font-bold">Pour la Direction Générale</div>
+                  <div className="italic text-emerald-700 font-bold mt-3">Cachet & Signature</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={triggerPrint}
+                className="flex items-center gap-1.5 px-4 py-2 bg-slate-900 dark:bg-emerald-600 text-white rounded-xl text-xs font-bold cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Imprimer l'attestation</span>
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal: Employee Full Profile */}
+      <Modal
+        isOpen={!!selectedEmployee}
+        onClose={() => setSelectedEmployee(null)}
+        title={selectedEmployee ? `Dossier Employé · ${selectedEmployee.firstName} ${selectedEmployee.lastName}` : 'Dossier Employé'}
+        maxWidth="2xl"
+      >
+        {selectedEmployee && (
+          <div className="space-y-4 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+              <div><span className="text-slate-400">Matricule :</span> <strong className="font-mono">{selectedEmployee.matricule}</strong></div>
+              <div><span className="text-slate-400">Contrat :</span> <strong>{selectedEmployee.contractType}</strong></div>
+              <div><span className="text-slate-400">Poste :</span> <strong>{selectedEmployee.position}</strong></div>
+              <div><span className="text-slate-400">Département :</span> <strong>{selectedEmployee.department}</strong></div>
+              <div><span className="text-slate-400">N° CNI :</span> <strong className="font-mono">{selectedEmployee.nationalId}</strong></div>
+              <div><span className="text-slate-400">N° CNPS :</span> <strong className="font-mono">{selectedEmployee.cnpsNumber}</strong></div>
+              <div><span className="text-slate-400">Téléphone :</span> <strong className="font-mono">{selectedEmployee.phone}</strong></div>
+              <div><span className="text-slate-400">Email :</span> <strong>{selectedEmployee.email}</strong></div>
+              <div><span className="text-slate-400">Salaire de base :</span> <strong className="text-emerald-600">{formatCurrency(selectedEmployee.baseSalary, currency)}</strong></div>
+              <div><span className="text-slate-400">Date d’embauche :</span> <strong>{formatDate(selectedEmployee.hireDate, language)}</strong></div>
+            </div>
+
+            <div className="flex justify-between items-center pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm(`Archiver le dossier de ${selectedEmployee.firstName} ${selectedEmployee.lastName} ?`)) {
+                    archiveEmployee(selectedEmployee.id);
+                    setSelectedEmployee(null);
+                  }
+                }}
+                className="px-3 py-2 border border-rose-200 dark:border-rose-800 text-rose-600 dark:text-rose-400 rounded-xl text-xs font-bold cursor-pointer"
+              >
+                Archiver le dossier
+              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDocEmpId(selectedEmployee.id);
+                    setSelectedEmployee(null);
+                    setIsDocModalOpen(true);
+                  }}
+                  className="px-3.5 py-2 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  Générer Attestation
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedEmployee(null)}
+                  className="px-4 py-2 bg-slate-900 dark:bg-emerald-600 text-white rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  Fermer
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

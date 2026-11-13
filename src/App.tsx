@@ -21,10 +21,18 @@ import { SettingsModule } from './components/settings/SettingsModule';
 import { AuthModule } from './components/auth/AuthModule';
 import { SuperAdminDashboard } from './components/superadmin/SuperAdminDashboard';
 import { ModuleLockedScreen } from './components/common/ModuleLockedScreen';
-import { ERPModuleId } from './types';
+import { AppModuleKey, ERPModuleId } from './types';
 
 const MainLayout: React.FC = () => {
-  const { activeModule, isAuthenticated, isSuperAdmin, isImpersonating, isModuleAccessible } = useApp();
+  const {
+    activeModule,
+    isAuthenticated,
+    isSuperAdmin,
+    isImpersonating,
+    isModuleAccessible,
+    hasUserModulePermission,
+    getUserAllowedModules
+  } = useApp();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (!isAuthenticated) {
@@ -37,6 +45,11 @@ const MainLayout: React.FC = () => {
   }
 
   const renderModule = () => {
+    const allowedModules = getUserAllowedModules();
+    const effectiveModule = hasUserModulePermission(activeModule as AppModuleKey)
+      ? activeModule
+      : allowedModules[0] || 'workspace';
+
     // Check if the current module is locked (expired or not subscribed)
     const subscriptionControlledModules: ERPModuleId[] = [
       'workspace',
@@ -49,13 +62,13 @@ const MainLayout: React.FC = () => {
       'reports'
     ];
 
-    if (subscriptionControlledModules.includes(activeModule as ERPModuleId)) {
-      if (!isModuleAccessible(activeModule as ERPModuleId)) {
-        return <ModuleLockedScreen moduleId={activeModule as ERPModuleId} />;
+    if (subscriptionControlledModules.includes(effectiveModule as ERPModuleId)) {
+      if (!isModuleAccessible(effectiveModule as ERPModuleId)) {
+        return <ModuleLockedScreen moduleId={effectiveModule as ERPModuleId} />;
       }
     }
 
-    switch (activeModule) {
+    switch (effectiveModule) {
       case 'dashboard':
         return <DashboardModule />;
       case 'workspace':
@@ -79,7 +92,7 @@ const MainLayout: React.FC = () => {
       case 'settings':
         return <SettingsModule />;
       default:
-        return <DashboardModule />;
+        return allowedModules.includes('workspace') ? <WorkspaceModule /> : <DashboardModule />;
     }
   };
 

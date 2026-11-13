@@ -78,8 +78,8 @@ export const CrmModule: React.FC = () => {
 
     addDeal({
       title: dealTitle,
-      customerId: cust.id,
-      customerName: cust.companyName || cust.name,
+      customerId: cust?.id || 'prospect-direct',
+      customerName: cust ? (cust.companyName || cust.name) : 'Prospect Direct',
       value: dealValue,
       stage: dealStage,
       expectedCloseDate: dealCloseDate,

@@ -4,6 +4,18 @@ export type UserRole = 'superadmin' | 'owner' | 'director' | 'accountant' | 'hr'
 
 export type ERPModuleId = 'workspace' | 'finances' | 'invoices' | 'hr' | 'payroll' | 'assets' | 'crm' | 'reports';
 
+export type AppModuleKey = 'dashboard' | ERPModuleId | 'audit' | 'settings';
+
+export const DEFAULT_ROLE_MODULES: Record<UserRole, AppModuleKey[]> = {
+  superadmin: ['dashboard', 'workspace', 'finances', 'invoices', 'hr', 'payroll', 'assets', 'crm', 'reports', 'audit', 'settings'],
+  owner: ['dashboard', 'workspace', 'finances', 'invoices', 'hr', 'payroll', 'assets', 'crm', 'reports', 'audit', 'settings'],
+  director: ['dashboard', 'workspace', 'finances', 'invoices', 'hr', 'payroll', 'assets', 'crm', 'reports', 'audit', 'settings'],
+  accountant: ['dashboard', 'workspace', 'finances', 'invoices', 'reports', 'payroll'],
+  hr: ['workspace', 'hr', 'payroll', 'assets'],
+  sales: ['workspace', 'crm', 'invoices'],
+  employee: ['workspace'],
+};
+
 export interface ModuleSubscription {
   moduleId: ERPModuleId;
   name: string;
@@ -46,6 +58,9 @@ export interface User {
   avatarUrl?: string;
   phone?: string;
   department?: string;
+  positionTitle?: string;
+  allowedModules?: AppModuleKey[];
+  accessToken?: string;
   isActive: boolean;
   lastLogin?: string;
 }
